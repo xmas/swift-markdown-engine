@@ -35,7 +35,7 @@ extension NativeTextView {
            let html = pasteboard.string(forType: .html),
            html.range(of: "<table", options: .caseInsensitive) != nil,
            let markdownTable = Self.htmlTableToMarkdown(html) {
-            insertText(markdownTable, replacementRange: selectedRange())
+            insertPasted(markdownTable, replacementRange: selectedRange())
             return
         }
 
@@ -58,13 +58,30 @@ extension NativeTextView {
         pasteAsPlainText(sender)
     }
 
+    /// Insert pasted content as its own discrete, coalescing-fenced undo step.
+    ///
+    /// The pasted run enters via `insertText(_:replacementRange:)` — the same
+    /// entry point AppKit uses for typed characters — so without a fence the
+    /// paste leaves the typing-undo group OPEN, and an immediately following
+    /// edit (typing or deleting) coalesces INTO it. One Cmd+Z would then revert
+    /// the whole paste instead of just that edit. Bracketing the insert with
+    /// `breakUndoCoalescing()` (before, to split from preceding typing; after,
+    /// to split from following edits) and naming the action mirrors the fence
+    /// `applyInlineReplacement` / wiki-link snapback already use.
+    private func insertPasted(_ text: String, replacementRange: NSRange) {
+        breakUndoCoalescing()
+        insertText(text, replacementRange: replacementRange)
+        undoManager?.setActionName("Paste")
+        breakUndoCoalescing()
+    }
+
     /// Insert pasted text, extending the `>` prefix to every line when the
     /// caret sits on a blockquote line — so a multi-line paste stays quoted
     /// instead of only its first line landing after the existing marker.
     private func insertPreservingBlockquote(_ text: String) {
         let sel = selectedRange()
         let prepared = MarkdownLists.blockquoteContinuedPaste(text, at: sel.location, in: string)
-        insertText(prepared, replacementRange: sel)
+        insertPasted(prepared, replacementRange: sel)
     }
 
     private func insertBlockEmbed(_ embed: String) {
@@ -79,7 +96,7 @@ extension NativeTextView {
         if afterLocation < nsText.length, nsText.character(at: afterLocation) != 0x0A {
             suffix = "\n"
         }
-        insertText(prefix + embed + suffix, replacementRange: sel)
+        insertPasted(prefix + embed + suffix, replacementRange: sel)
     }
 
     /// Reads the textual content of a pasted markdown/text file URL — the
