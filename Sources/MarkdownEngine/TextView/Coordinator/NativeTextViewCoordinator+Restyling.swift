@@ -147,7 +147,7 @@ extension NativeTextViewCoordinator {
 
         for token in tokens {
             switch token.kind {
-            case .codeBlock, .inlineCode:
+            case .codeBlock, .mermaidBlock, .inlineCode:
                 codeTokens.append(token)
             case .inlineLatex:
                 latexTokens.append(token)
@@ -216,7 +216,7 @@ extension NativeTextViewCoordinator {
             let token = tokens[idx]
             paragraphs.append(text.paragraphRange(for: token.range))
 
-            if token.kind == .codeBlock || token.kind == .blockLatex {
+            if token.kind == .codeBlock || token.kind == .mermaidBlock || token.kind == .blockLatex {
                 for markerRange in token.markerRanges {
                     paragraphs.append(text.paragraphRange(for: markerRange))
                 }

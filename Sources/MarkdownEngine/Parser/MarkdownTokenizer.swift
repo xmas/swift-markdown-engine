@@ -15,10 +15,21 @@ import Foundation
 // MARK: - Tokenizer
 enum MarkdownTokenizer {
 
+    static func isCodeLike(_ kind: MarkdownTokenKind) -> Bool {
+        kind == .codeBlock || kind == .mermaidBlock || kind == .inlineCode
+    }
+
+    static func isMermaidLanguage(_ language: String?) -> Bool {
+        guard let language else { return false }
+        return language
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() == "mermaid"
+    }
+
     // MARK: - Code Block Helpers
 
     static func extractLanguage(from token: MarkdownToken, in text: String) -> String? {
-        guard token.kind == .codeBlock,
+        guard token.kind == .codeBlock || token.kind == .mermaidBlock,
               let openingMarker = token.markerRanges.first,
               openingMarker.length > 4 else { return nil }
 

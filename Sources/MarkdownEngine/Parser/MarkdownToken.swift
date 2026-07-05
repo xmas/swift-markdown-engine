@@ -25,6 +25,7 @@ enum MarkdownTokenKind {
     /// One blockquote line; `markerRanges[0]` is the `>` run, nesting = count of `>`.
     case blockquote
     case codeBlock
+    case mermaidBlock
     case inlineCode
     case blockLatex
     case inlineLatex

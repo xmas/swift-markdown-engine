@@ -54,7 +54,7 @@ enum MarkdownStyler {
     ) -> [StyledRange] {
         let tokens = precomputedTokens ?? MarkdownTokenizer.parseTokensViaAST(in: text)
         let nsText = text as NSString
-        let codeTokens = tokens.filter { $0.kind == .codeBlock || $0.kind == .inlineCode }
+        let codeTokens = tokens.filter { MarkdownTokenizer.isCodeLike($0.kind) }
         let baseFont = NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
         let baseDefaultLineHeight = ceil(
             layoutBridge?.defaultLineHeight(for: baseFont)
@@ -88,6 +88,7 @@ enum MarkdownStyler {
         result += styleInlineLatex(ctx)
         result += styleImageEmbeds(ctx)
         result += styleImageLinks(ctx)
+        result += styleMermaidBlocks(ctx)
         result += styleTables(ctx)
         return result
     }

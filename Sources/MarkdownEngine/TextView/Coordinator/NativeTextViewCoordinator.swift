@@ -51,7 +51,7 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
     var lastImageFingerprint: AnyHashable?
     var lastWikiFingerprint: AnyHashable?
     private var busObservers: [NSObjectProtocol] = []
-    private var registeredAppearanceObserverName: Notification.Name?
+    private var registeredAppearanceObserverNames: Set<Notification.Name> = []
     weak var textView: NSTextView?
     /// Owns the scroll-away header (build, content refresh, collapse/expand,
     /// teardown). Created on first reconcile with a non-nil header.
@@ -186,22 +186,25 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
         subscribeToAppearanceNotification()
     }
 
-    /// (Re)register the syntax-highlighter appearance observer; idempotent and unsubscribes on nil.
+    /// (Re)register renderer appearance observers; idempotent and unsubscribes stale names.
     private func subscribeToAppearanceNotification() {
-        let target = configuration.services.syntaxHighlighter.appearanceDidChangeNotification
-        if registeredAppearanceObserverName == target { return }
-        if let current = registeredAppearanceObserverName {
+        let targets = Set([
+            configuration.services.syntaxHighlighter.appearanceDidChangeNotification,
+            configuration.services.mermaid.appearanceDidChangeNotification
+        ].compactMap { $0 })
+        if registeredAppearanceObserverNames == targets { return }
+        for current in registeredAppearanceObserverNames.subtracting(targets) {
             NotificationCenter.default.removeObserver(self, name: current, object: nil)
         }
-        registeredAppearanceObserverName = nil
-        guard let name = target else { return }
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAppearanceChange(_:)),
-            name: name,
-            object: nil
-        )
-        registeredAppearanceObserverName = name
+        for name in targets.subtracting(registeredAppearanceObserverNames) {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleAppearanceChange(_:)),
+                name: name,
+                object: nil
+            )
+        }
+        registeredAppearanceObserverNames = targets
     }
 
     /// Subscribe to whichever bus notification names the current configuration
@@ -361,4 +364,3 @@ extension NSTextView {
         return boundingRect
     }
 }
-

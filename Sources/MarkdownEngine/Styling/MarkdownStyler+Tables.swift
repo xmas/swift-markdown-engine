@@ -19,11 +19,7 @@ extension MarkdownStyler {
         case right
     }
 
-    struct ParsedTable {
-        let header: [String]
-        let alignments: [TableAlignment]
-        let rows: [[String]]
-    }
+    typealias ParsedTable = MarkdownTable
 
     static func styleTables(_ ctx: StylingContext) -> [StyledRange] {
         var attrs: [StyledRange] = []
@@ -104,51 +100,7 @@ extension MarkdownStyler {
     // MARK: - Parsing
 
     static func parseTableSource(_ source: String) -> ParsedTable? {
-        let rawLines = source.components(separatedBy: CharacterSet.newlines)
-        let lines = rawLines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard lines.count >= 2 else { return nil }
-
-        let header = parseTableRow(lines[0])
-        let alignments = parseTableAlignments(lines[1])
-        guard !header.isEmpty, !alignments.isEmpty else { return nil }
-
-        let columnCount = max(header.count, alignments.count)
-        let bodyLines = Array(lines.dropFirst(2))
-
-        func pad<T>(_ array: [T], to count: Int, with fill: T) -> [T] {
-            if array.count == count { return array }
-            if array.count > count { return Array(array.prefix(count)) }
-            return array + Array(repeating: fill, count: count - array.count)
-        }
-
-        let paddedHeader = pad(header, to: columnCount, with: "")
-        let paddedAlign = pad(alignments, to: columnCount, with: .left)
-        let rows = bodyLines.map { pad(parseTableRow($0), to: columnCount, with: "") }
-
-        return ParsedTable(header: paddedHeader, alignments: paddedAlign, rows: rows)
-    }
-
-    private static func parseTableRow(_ line: String) -> [String] {
-        var s = line.trimmingCharacters(in: .whitespaces)
-        if s.hasPrefix("|") { s.removeFirst() }
-        if s.hasSuffix("|") { s.removeLast() }
-        return s.split(separator: "|", omittingEmptySubsequences: false).map {
-            $0.trimmingCharacters(in: .whitespaces)
-        }
-    }
-
-    private static func parseTableAlignments(_ line: String) -> [TableAlignment] {
-        let cells = parseTableRow(line)
-        return cells.map { cell in
-            let trimmed = cell.trimmingCharacters(in: .whitespaces)
-            let leading = trimmed.hasPrefix(":")
-            let trailing = trimmed.hasSuffix(":")
-            switch (leading, trailing) {
-            case (true, true): return .center
-            case (false, true): return .right
-            default: return .left
-            }
-        }
+        MarkdownTable.parse(source)
     }
 
     // MARK: - Inline-formatted cell strings

@@ -179,6 +179,48 @@ public struct NoOpLatexRenderer: LatexRenderer {
     public func render(latex: String, fontSize: CGFloat, theme: MarkdownEditorTheme) -> LatexRenderResult? { nil }
 }
 
+// MARK: - Mermaid
+
+/// Renders Mermaid diagram source to an image for block display.
+///
+/// The core engine intentionally does not bundle a Mermaid runtime; embedders
+/// can bridge to WebKit, a local CLI, or a remote renderer by supplying this
+/// service. When rendering returns `nil`, Mermaid fences fall back to ordinary
+/// code-block display.
+public protocol MermaidRenderer: Sendable {
+    /// Render Mermaid diagram source at the requested font size.
+    /// - Returns: A rendered result, or `nil` if rendering is unavailable or failed.
+    func render(mermaid: String, fontSize: CGFloat, theme: MarkdownEditorTheme) -> MermaidRenderResult?
+
+    /// Notification name posted when renderer output should be invalidated.
+    /// Return `nil` if rendering output is stable after construction.
+    var appearanceDidChangeNotification: Notification.Name? { get }
+}
+
+public extension MermaidRenderer {
+    var appearanceDidChangeNotification: Notification.Name? { nil }
+}
+
+/// Output of a Mermaid render call.
+public struct MermaidRenderResult: Sendable {
+    public let image: NSImage
+    public let size: CGSize
+    /// Distance from the image's bottom edge to its visual baseline.
+    public let baselineOffset: CGFloat
+
+    public init(image: NSImage, size: CGSize, baselineOffset: CGFloat = 0) {
+        self.image = image
+        self.size = size
+        self.baselineOffset = baselineOffset
+    }
+}
+
+/// Default renderer that leaves Mermaid fences as code blocks.
+public struct NoOpMermaidRenderer: MermaidRenderer {
+    public init() {}
+    public func render(mermaid: String, fontSize: CGFloat, theme: MarkdownEditorTheme) -> MermaidRenderResult? { nil }
+}
+
 // MARK: - Event Bus
 
 /// Optional notification-name bridge that lets the editor communicate with
@@ -299,6 +341,7 @@ public struct MarkdownEditorServices: Sendable {
     public var images: any EmbeddedImageProvider
     public var syntaxHighlighter: any SyntaxHighlighter
     public var latex: any LatexRenderer
+    public var mermaid: any MermaidRenderer
     public var bus: MarkdownEditorBus
 
     public init(
@@ -306,12 +349,14 @@ public struct MarkdownEditorServices: Sendable {
         images: any EmbeddedImageProvider = NoOpEmbeddedImageProvider(),
         syntaxHighlighter: any SyntaxHighlighter = PlainTextSyntaxHighlighter(),
         latex: any LatexRenderer = NoOpLatexRenderer(),
+        mermaid: any MermaidRenderer = NoOpMermaidRenderer(),
         bus: MarkdownEditorBus = .default
     ) {
         self.wikiLinks = wikiLinks
         self.images = images
         self.syntaxHighlighter = syntaxHighlighter
         self.latex = latex
+        self.mermaid = mermaid
         self.bus = bus
     }
 

@@ -127,12 +127,22 @@ enum BlockLevelTokenizer {
             lineStart = next
         }
         guard closingStart >= 0 else { return [] }   // no closing fence → legacy didn't match
+        let tokenKind: MarkdownTokenKind = MarkdownTokenizer.isMermaidLanguage(language(in: s, openingLineEnd: afterOpenLine))
+            ? .mermaidBlock
+            : .codeBlock
         return [MarkdownToken(
-            kind: .codeBlock,
+            kind: tokenKind,
             range: NSRange(location: 0, length: closingStart + 3),
             contentRange: NSRange(location: afterOpenLine, length: closingStart - afterOpenLine),
             markerRanges: [NSRange(location: 0, length: afterOpenLine),
                            NSRange(location: closingStart, length: 3)])]
+    }
+
+    private static func language(in s: NSString, openingLineEnd: Int) -> String? {
+        guard openingLineEnd > 3 else { return nil }
+        let raw = s.substring(with: NSRange(location: 3, length: openingLineEnd - 3))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return raw.isEmpty ? nil : raw
     }
 
     // MARK: - Table  (legacy header `|…|` + separator `|-…-|` + data rows)
