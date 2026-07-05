@@ -106,6 +106,13 @@ public struct MarkdownTable: Sendable, Equatable {
         case down
     }
 
+    struct CellEditTarget {
+        let tableRange: NSRange
+        let cellRange: NSRange
+        let row: Int
+        let column: Int
+    }
+
     static func cellNavigationLocation(
         in source: String,
         selectionRange: NSRange,
@@ -158,6 +165,10 @@ public struct MarkdownTable: Sendable, Equatable {
     }
 
     public static func cellContentLocation(in source: String, tableRange: NSRange, row: Int, column: Int) -> Int? {
+        cellContentRange(in: source, tableRange: tableRange, row: row, column: column)?.location
+    }
+
+    static func cellContentRange(in source: String, tableRange: NSRange, row: Int, column: Int) -> NSRange? {
         let ns = source as NSString
         guard tableRange.location >= 0,
               tableRange.length > 0,
@@ -176,7 +187,61 @@ public struct MarkdownTable: Sendable, Equatable {
         guard lineRanges.indices.contains(lineIndex) else { return nil }
         let lineRange = lineRanges[lineIndex]
         let line = ns.substring(with: lineRange)
-        return cellContentLocation(inLine: line, lineStart: lineRange.location, column: column)
+        return cellContentRange(inLine: line, lineStart: lineRange.location, column: column)
+    }
+
+    static func editTarget(in source: String, selectionRange: NSRange) -> CellEditTarget? {
+        cellEditTarget(in: source, selectionRange: selectionRange, redirectSeparatorToBody: false)
+    }
+
+    static func syntaxRedirectTarget(in source: String, selectionRange: NSRange) -> CellEditTarget? {
+        cellEditTarget(in: source, selectionRange: selectionRange, redirectSeparatorToBody: true)
+    }
+
+    static func tableRangeContainingEdit(_ range: NSRange, in source: String) -> NSRange? {
+        selection(in: source, selectionRange: range)?.range
+    }
+
+    private static func cellEditTarget(
+        in source: String,
+        selectionRange: NSRange,
+        redirectSeparatorToBody: Bool
+    ) -> CellEditTarget? {
+        let ns = source as NSString
+        guard let selection = selection(in: source, selectionRange: selectionRange) else { return nil }
+        let caret = min(max(selectionRange.location, selection.range.location), NSMaxRange(selection.range))
+        let lineRange = ns.lineRange(for: NSRange(location: min(caret, max(0, ns.length - 1)), length: 0))
+        let tablePrefix = NSRange(location: selection.range.location, length: max(0, lineRange.location - selection.range.location))
+        let lineOffset = ns.substring(with: tablePrefix).reduce(0) { count, character in
+            character == "\n" ? count + 1 : count
+        }
+
+        let row: Int?
+        if lineOffset == 0 {
+            row = -1
+        } else if lineOffset == 1 {
+            row = redirectSeparatorToBody ? (selection.table.rows.isEmpty ? -1 : 0) : nil
+        } else {
+            row = lineOffset - 2
+        }
+        guard let row else { return nil }
+
+        let line = ns.substring(with: NSIntersectionRange(lineRange, selection.range))
+        let column = columnIndex(at: caret, in: line, lineStart: lineRange.location)
+            ?? selection.selectedColumn
+            ?? 0
+        guard let cellRange = cellContentRange(
+            in: source,
+            tableRange: selection.range,
+            row: row,
+            column: column
+        ) else { return nil }
+        return CellEditTarget(
+            tableRange: selection.range,
+            cellRange: cellRange,
+            row: row,
+            column: column
+        )
     }
 
     public func serialized() -> String {
@@ -340,7 +405,7 @@ public struct MarkdownTable: Sendable, Equatable {
         return max(0, column)
     }
 
-    private static func cellContentLocation(inLine line: String, lineStart: Int, column: Int) -> Int? {
+    private static func cellContentRange(inLine line: String, lineStart: Int, column: Int) -> NSRange? {
         let targetColumn = max(0, column)
         let ns = line as NSString
         var end = ns.length
@@ -365,7 +430,7 @@ public struct MarkdownTable: Sendable, Equatable {
             let ch = ns.character(at: i)
             if !escaping, ch == 0x7C {
                 if currentColumn == targetColumn {
-                    return lineStart + trimmedCellStart(in: ns, start: cellStart, end: i)
+                    return trimmedCellRange(in: ns, lineStart: lineStart, start: cellStart, end: i)
                 }
                 currentColumn += 1
                 cellStart = i + 1
@@ -378,17 +443,23 @@ public struct MarkdownTable: Sendable, Equatable {
         }
 
         guard currentColumn == targetColumn else { return nil }
-        return lineStart + trimmedCellStart(in: ns, start: cellStart, end: end)
+        return trimmedCellRange(in: ns, lineStart: lineStart, start: cellStart, end: end)
     }
 
-    private static func trimmedCellStart(in ns: NSString, start: Int, end: Int) -> Int {
+    private static func trimmedCellRange(in ns: NSString, lineStart: Int, start: Int, end: Int) -> NSRange {
         var location = start
         while location < end {
             let ch = ns.character(at: location)
             guard ch == 0x20 || ch == 0x09 else { break }
             location += 1
         }
-        return location
+        var upperBound = end
+        while upperBound > location {
+            let ch = ns.character(at: upperBound - 1)
+            guard ch == 0x20 || ch == 0x09 else { break }
+            upperBound -= 1
+        }
+        return NSRange(location: lineStart + location, length: max(0, upperBound - location))
     }
 
     private static func parseAlignment(_ cell: String) -> MarkdownTableAlignment? {

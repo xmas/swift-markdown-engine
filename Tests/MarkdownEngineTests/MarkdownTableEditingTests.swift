@@ -7,6 +7,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import MarkdownEngine
+import SwiftUI
 
 @MainActor
 @Suite("Markdown table source editing")
@@ -119,6 +120,86 @@ struct MarkdownTableEditingTests {
 
         #expect(headerLocation == ns.range(of: "B").location)
         #expect(bodyLocation == ns.range(of: "b1").location)
+    }
+
+    @Test func redirectsSeparatorSyntaxToEditableBodyCell() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let ns = text as NSString
+        let separatorLocation = ns.range(of: "---").location
+
+        let directTarget = MarkdownTable.editTarget(
+            in: text,
+            selectionRange: NSRange(location: separatorLocation, length: 0)
+        )
+        let redirectTarget = MarkdownTable.syntaxRedirectTarget(
+            in: text,
+            selectionRange: NSRange(location: separatorLocation, length: 0)
+        )
+
+        #expect(directTarget == nil)
+        #expect(redirectTarget?.cellRange.location == ns.range(of: "a1").location)
+    }
+
+    @Test func protectedEditRedirectsSyntaxTypingIntoCellContent() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let ns = text as NSString
+        let textView = NativeTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        let coordinator = NativeTextViewCoordinator(
+            text: .constant(""),
+            fontName: "SF Pro Text",
+            fontSize: 14,
+            isWikiLinkActive: .constant(false),
+            onLinkClick: nil,
+            onInlineSelectionChange: nil
+        )
+        coordinator.textView = textView
+        textView.string = text
+        textView.setSelectedRange(ns.range(of: "---"))
+        textView.delegate = coordinator
+
+        let allowed = coordinator.textView(
+            textView,
+            shouldChangeTextIn: textView.selectedRange(),
+            replacementString: "X"
+        )
+
+        #expect(!allowed)
+        #expect(textView.string.contains("| Xa1 | b1 |"))
+        #expect(textView.string.contains("| --- | --- |"))
+    }
+
+    @Test func selectionOnTableSyntaxRemapsToCellContent() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let ns = text as NSString
+        let textView = NativeTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        let coordinator = NativeTextViewCoordinator(
+            text: .constant(""),
+            fontName: "SF Pro Text",
+            fontSize: 14,
+            isWikiLinkActive: .constant(false),
+            onLinkClick: nil,
+            onInlineSelectionChange: nil
+        )
+        coordinator.textView = textView
+        textView.string = text
+        textView.setSelectedRange(ns.range(of: "---"))
+
+        let remapped = coordinator.remapTableSyntaxSelectionIfNeeded(textView: textView)
+
+        #expect(remapped)
+        #expect(textView.selectedRange() == NSRange(location: ns.range(of: "a1").location, length: 0))
     }
 
     @Test func arrowNavigationMovesThroughHeaderBodyAndOutOfTable() {

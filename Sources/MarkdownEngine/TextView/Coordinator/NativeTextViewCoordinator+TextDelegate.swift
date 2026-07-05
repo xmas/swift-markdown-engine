@@ -206,6 +206,9 @@ extension NativeTextViewCoordinator {
             onInlineSelectionChange?(nil)
             return
         }
+        if remapTableSyntaxSelectionIfNeeded(textView: tv) {
+            return
+        }
         updateSelectionStates(tv)
         let selLoc = selRange.location
 
@@ -379,7 +382,6 @@ extension NativeTextViewCoordinator {
     public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
         if isProgrammaticEdit { return true }
         if isWritingToolsActive { return true }
-        pendingEditedRange = NSRange(location: affectedCharRange.location, length: replacementString?.utf16.count ?? 0)
         let currentLen = (textView.string as NSString).length
         let maxR = affectedCharRange.location + affectedCharRange.length
         if affectedCharRange.location > currentLen || maxR > currentLen {
@@ -390,6 +392,16 @@ extension NativeTextViewCoordinator {
             pendingPreEditActiveTokenIndices = nil
             return true
         }
+        if let tableDecision = handleProtectedTableEdit(
+            textView: textView,
+            affectedCharRange: affectedCharRange,
+            replacementString: replacementString
+        ) {
+            pendingPreEditActiveTokenIndices = nil
+            return tableDecision
+        }
+
+        pendingEditedRange = NSRange(location: affectedCharRange.location, length: replacementString?.utf16.count ?? 0)
         let parsed = parsedDocument(for: textView.string)
         pendingPreEditActiveTokenIndices = MarkdownDetection.computeActiveTokenIndices(
             selectionRange: textView.selectedRange(),

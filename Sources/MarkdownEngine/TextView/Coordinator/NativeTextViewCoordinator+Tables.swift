@@ -49,6 +49,67 @@ extension NativeTextViewCoordinator {
             rect: rect
         ))
     }
+
+    func remapTableSyntaxSelectionIfNeeded(textView: NSTextView) -> Bool {
+        let selectionRange = textView.selectedRange()
+        let source = textView.string
+        guard let tableRange = MarkdownTable.tableRangeContainingEdit(selectionRange, in: source),
+              selectionRange.location < NSMaxRange(tableRange) else { return false }
+
+        if let target = MarkdownTable.editTarget(in: source, selectionRange: selectionRange),
+           target.tableRange == tableRange,
+           target.cellRange.containsOrTouches(selectionRange) {
+            return false
+        }
+        guard let target = MarkdownTable.syntaxRedirectTarget(in: source, selectionRange: selectionRange) else {
+            return false
+        }
+
+        textView.setSelectedRange(NSRange(location: target.cellRange.location, length: 0))
+        updateTableSelection(textView: textView)
+        return true
+    }
+
+    func handleProtectedTableEdit(
+        textView: NSTextView,
+        affectedCharRange: NSRange,
+        replacementString: String?
+    ) -> Bool? {
+        let source = textView.string
+        guard let tableRange = MarkdownTable.tableRangeContainingEdit(affectedCharRange, in: source) else {
+            return nil
+        }
+
+        if let target = MarkdownTable.editTarget(in: source, selectionRange: textView.selectedRange()),
+           target.tableRange == tableRange,
+           target.cellRange.containsOrTouches(affectedCharRange) {
+            return true
+        }
+
+        guard let replacementString, !replacementString.isEmpty else {
+            return false
+        }
+        guard let target = MarkdownTable.syntaxRedirectTarget(in: source, selectionRange: textView.selectedRange()) else {
+            return false
+        }
+
+        isProgrammaticEdit = true
+        defer { isProgrammaticEdit = false }
+        textView.insertText(
+            replacementString,
+            replacementRange: NSRange(location: target.cellRange.location, length: 0)
+        )
+        updateTableSelection(textView: textView)
+        return false
+    }
+}
+
+private extension NSRange {
+    func containsOrTouches(_ other: NSRange) -> Bool {
+        other.location >= location
+            && NSMaxRange(other) <= NSMaxRange(self)
+            && (length > 0 || other.length == 0)
+    }
 }
 
 private extension NSTextView {
