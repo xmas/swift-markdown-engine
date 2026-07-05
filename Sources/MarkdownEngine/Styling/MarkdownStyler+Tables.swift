@@ -25,7 +25,7 @@ extension MarkdownStyler {
         var attrs: [StyledRange] = []
         // Per-content occurrence counter so identical tables get distinct sourceIDs.
         var occurrenceByContentHash: [Int: Int] = [:]
-        for (idx, token) in ctx.tokens.enumerated() where token.kind == .table {
+        for token in ctx.tokens where token.kind == .table {
             // Tokenizer already drops tables overlapping fenced code, so no re-check here.
             attrs.append((token.range, [.spellingState: 0]))
 
@@ -36,24 +36,6 @@ extension MarkdownStyler {
             let contentHash = stableTableContentHash(for: source)
             let occurrenceIndex = occurrenceByContentHash[contentHash, default: 0]
             occurrenceByContentHash[contentHash] = occurrenceIndex + 1
-
-            let isActive = ctx.activeTokenIndices.contains(idx)
-            if isActive {
-                // Caret inside the table — show editable source, pipes muted like other syntax.
-                let muted = ctx.configuration.theme.mutedText
-                let body = ctx.configuration.theme.bodyText
-                attrs.append((token.range, [.foregroundColor: body, .font: ctx.baseFont]))
-                // Mute each `|` so the structure stays legible while editing.
-                let end = NSMaxRange(token.range)
-                var i = token.range.location
-                while i < end {
-                    if ctx.nsText.character(at: i) == 0x7C {   // '|'
-                        attrs.append((NSRange(location: i, length: 1), [.foregroundColor: muted]))
-                    }
-                    i += 1
-                }
-                continue
-            }
 
             // See renderTable: resolve table colors under the text view's real appearance.
             let renderAppearance = ctx.layoutBridge?.firstTextContainer?.textView?.effectiveAppearance

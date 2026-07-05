@@ -3,10 +3,12 @@
 //  MarkdownEngineTests
 //
 
+import AppKit
 import Foundation
 import Testing
 @testable import MarkdownEngine
 
+@MainActor
 @Suite("Markdown table source editing")
 struct MarkdownTableEditingTests {
 
@@ -97,5 +99,25 @@ struct MarkdownTableEditingTests {
         #expect(selection?.selectedRow == 1)
         #expect(selection?.selectedColumn == 1)
         #expect(selection.map { ns.substring(with: $0.range) } == "| A | B |\n| --- | --- |\n| a1 | b1 |\n| a2 | b2 |\n")
+    }
+
+    @Test func activeTablesStayRenderedForToolbarEditing() {
+        _ = NSApplication.shared
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let tokens = MarkdownTokenizer.parseTokensViaAST(in: text)
+        let attrs = MarkdownStyler.styleAttributes(
+            text: text,
+            fontName: "Helvetica",
+            fontSize: 14,
+            caretLocation: 2,
+            activeTokenIndices: [0],
+            precomputedTokens: tokens
+        )
+
+        #expect(attrs.contains { _, attributes in attributes[.latexImage] is NSImage })
     }
 }
