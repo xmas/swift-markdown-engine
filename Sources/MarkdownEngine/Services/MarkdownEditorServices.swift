@@ -259,6 +259,11 @@ public struct MarkdownEditorBus: Sendable {
     /// Posted by the host UI to insert an image embed.
     /// Expected `userInfo["url"] as? String`.
     public var applyImageRequest: Notification.Name?
+    /// Posted by the host UI to move the caret into a rendered table cell.
+    /// Expected `userInfo["range"] as? NSValue` containing the table source range,
+    /// `userInfo["row"] as? Int` where -1 means the header row, and
+    /// `userInfo["column"] as? Int`.
+    public var selectTableCellRequest: Notification.Name?
     /// Posted by the engine after every selection change with `userInfo["isBold"] as? Bool`.
     public var selectionBoldDidChange: Notification.Name?
     /// Posted by the engine after every selection change with `userInfo["isItalic"] as? Bool`.
@@ -296,6 +301,7 @@ public struct MarkdownEditorBus: Sendable {
         applyCodeBlockRequest: Notification.Name? = nil,
         applyHorizontalRuleRequest: Notification.Name? = nil,
         applyImageRequest: Notification.Name? = nil,
+        selectTableCellRequest: Notification.Name? = nil,
         selectionBoldDidChange: Notification.Name? = nil,
         selectionItalicDidChange: Notification.Name? = nil,
         selectionHighlightDidChange: Notification.Name? = nil,
@@ -317,6 +323,7 @@ public struct MarkdownEditorBus: Sendable {
         self.applyCodeBlockRequest = applyCodeBlockRequest
         self.applyHorizontalRuleRequest = applyHorizontalRuleRequest
         self.applyImageRequest = applyImageRequest
+        self.selectTableCellRequest = selectTableCellRequest
         self.selectionBoldDidChange = selectionBoldDidChange
         self.selectionItalicDidChange = selectionItalicDidChange
         self.selectionHighlightDidChange = selectionHighlightDidChange

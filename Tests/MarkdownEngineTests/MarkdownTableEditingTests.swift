@@ -101,6 +101,65 @@ struct MarkdownTableEditingTests {
         #expect(selection.map { ns.substring(with: $0.range) } == "| A | B |\n| --- | --- |\n| a1 | b1 |\n| a2 | b2 |\n")
     }
 
+    @Test func locatesHeaderAndBodyCellInsertionPoints() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let ns = text as NSString
+        let selection = MarkdownTable.selection(in: text, selectionRange: ns.range(of: "a1"))
+
+        let headerLocation = selection.flatMap {
+            MarkdownTable.cellContentLocation(in: text, tableRange: $0.range, row: -1, column: 1)
+        }
+        let bodyLocation = selection.flatMap {
+            MarkdownTable.cellContentLocation(in: text, tableRange: $0.range, row: 0, column: 1)
+        }
+
+        #expect(headerLocation == ns.range(of: "B").location)
+        #expect(bodyLocation == ns.range(of: "b1").location)
+    }
+
+    @Test func arrowNavigationMovesThroughHeaderBodyAndOutOfTable() {
+        let text = """
+        Before
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        | a2 | b2 |
+        After
+        """
+        let ns = text as NSString
+        let headerBLocation = ns.range(of: " B |").location + 1
+
+        let rightFromHeader = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: ns.range(of: "A"),
+            direction: .right
+        )
+        let downFromHeader = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: NSRange(location: headerBLocation, length: 1),
+            direction: .down
+        )
+        let leftFromFirstBodyCell = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: ns.range(of: "a1"),
+            direction: .left
+        )
+        let rightFromLastBodyCell = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: ns.range(of: "b2"),
+            direction: .right
+        )
+
+        #expect(rightFromHeader == headerBLocation)
+        #expect(downFromHeader == ns.range(of: "b1").location)
+        #expect(leftFromFirstBodyCell == headerBLocation)
+        #expect(rightFromLastBodyCell == ns.range(of: "After").location)
+    }
+
     @Test func activeTablesStayRenderedForToolbarEditing() {
         _ = NSApplication.shared
         let text = """

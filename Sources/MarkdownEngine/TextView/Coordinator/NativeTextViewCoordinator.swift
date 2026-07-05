@@ -283,6 +283,11 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
                 self?.handleImageNotification(notification)
             })
         }
+        if let name = bus.selectTableCellRequest {
+            busObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                self?.handleSelectTableCellNotification(notification)
+            })
+        }
         if let name = bus.findScrollToRange {
             busObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
                 self?.handleFindScrollToRange(notification)

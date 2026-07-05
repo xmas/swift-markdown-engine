@@ -89,5 +89,12 @@ final class NativeTextView: NSTextView {
         coord.restyleParagraphs([paragraph], in: self)
     }
 
+    override func keyDown(with event: NSEvent) {
+        if moveSelectionForTableArrowKey(event) {
+            return
+        }
+        super.keyDown(with: event)
+    }
+
     deinit { caretIndicatorObservation?.invalidate() }
 }

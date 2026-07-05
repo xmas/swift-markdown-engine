@@ -99,6 +99,86 @@ public struct MarkdownTable: Sendable, Equatable {
         return nil
     }
 
+    enum CellNavigationDirection {
+        case left
+        case right
+        case up
+        case down
+    }
+
+    static func cellNavigationLocation(
+        in source: String,
+        selectionRange: NSRange,
+        direction: CellNavigationDirection
+    ) -> Int? {
+        guard let selection = selection(in: source, selectionRange: selectionRange) else { return nil }
+        let columnCount = max(1, selection.table.columnCount)
+        let currentRow = selection.selectedRow ?? -1
+        let currentColumn = min(max(selection.selectedColumn ?? 0, 0), columnCount - 1)
+
+        let target: (row: Int, column: Int)?
+        switch direction {
+        case .left:
+            if currentColumn > 0 {
+                target = (currentRow, currentColumn - 1)
+            } else if currentRow > -1 {
+                target = (currentRow - 1, columnCount - 1)
+            } else {
+                return selection.range.location
+            }
+        case .right:
+            if currentColumn + 1 < columnCount {
+                target = (currentRow, currentColumn + 1)
+            } else if currentRow < selection.table.rows.count - 1 {
+                target = (currentRow + 1, 0)
+            } else {
+                return NSMaxRange(selection.range)
+            }
+        case .up:
+            if currentRow > -1 {
+                target = (currentRow - 1, currentColumn)
+            } else {
+                return selection.range.location
+            }
+        case .down:
+            if currentRow < selection.table.rows.count - 1 {
+                target = (currentRow + 1, currentColumn)
+            } else {
+                return NSMaxRange(selection.range)
+            }
+        }
+
+        guard let target else { return nil }
+        return cellContentLocation(
+            in: source,
+            tableRange: selection.range,
+            row: target.row,
+            column: target.column
+        )
+    }
+
+    public static func cellContentLocation(in source: String, tableRange: NSRange, row: Int, column: Int) -> Int? {
+        let ns = source as NSString
+        guard tableRange.location >= 0,
+              tableRange.length > 0,
+              NSMaxRange(tableRange) <= ns.length else { return nil }
+
+        var lineRanges: [NSRange] = []
+        var cursor = tableRange.location
+        let end = NSMaxRange(tableRange)
+        while cursor < end {
+            let line = ns.lineRange(for: NSRange(location: cursor, length: 0))
+            lineRanges.append(NSIntersectionRange(line, tableRange))
+            cursor = NSMaxRange(line)
+        }
+
+        let lineIndex = row < 0 ? 0 : row + 2
+        guard lineRanges.indices.contains(lineIndex) else { return nil }
+        let lineRange = lineRanges[lineIndex]
+        let line = ns.substring(with: lineRange)
+        return cellContentLocation(inLine: line, lineStart: lineRange.location, column: column)
+    }
+
     public func serialized() -> String {
         var lines: [String] = []
         lines.append(Self.serializedRow(header))
@@ -258,6 +338,57 @@ public struct MarkdownTable: Sendable, Equatable {
             i += 1
         }
         return max(0, column)
+    }
+
+    private static func cellContentLocation(inLine line: String, lineStart: Int, column: Int) -> Int? {
+        let targetColumn = max(0, column)
+        let ns = line as NSString
+        var end = ns.length
+        while end > 0 {
+            let ch = ns.character(at: end - 1)
+            guard ch == 0x0A || ch == 0x0D || ch == 0x20 || ch == 0x09 else { break }
+            end -= 1
+        }
+
+        var i = 0
+        while i < end {
+            let ch = ns.character(at: i)
+            guard ch == 0x20 || ch == 0x09 else { break }
+            i += 1
+        }
+        if i < end, ns.character(at: i) == 0x7C { i += 1 }
+
+        var currentColumn = 0
+        var cellStart = i
+        var escaping = false
+        while i < end {
+            let ch = ns.character(at: i)
+            if !escaping, ch == 0x7C {
+                if currentColumn == targetColumn {
+                    return lineStart + trimmedCellStart(in: ns, start: cellStart, end: i)
+                }
+                currentColumn += 1
+                cellStart = i + 1
+            } else if !escaping, ch == 0x5C {
+                escaping = true
+            } else {
+                escaping = false
+            }
+            i += 1
+        }
+
+        guard currentColumn == targetColumn else { return nil }
+        return lineStart + trimmedCellStart(in: ns, start: cellStart, end: end)
+    }
+
+    private static func trimmedCellStart(in ns: NSString, start: Int, end: Int) -> Int {
+        var location = start
+        while location < end {
+            let ch = ns.character(at: location)
+            guard ch == 0x20 || ch == 0x09 else { break }
+            location += 1
+        }
+        return location
     }
 
     private static func parseAlignment(_ cell: String) -> MarkdownTableAlignment? {
