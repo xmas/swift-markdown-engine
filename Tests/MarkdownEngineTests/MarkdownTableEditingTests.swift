@@ -3,6 +3,7 @@
 //  MarkdownEngineTests
 //
 
+import Foundation
 import Testing
 @testable import MarkdownEngine
 
@@ -73,5 +74,28 @@ struct MarkdownTableEditingTests {
 
         #expect(table?.rows == [["a|b", "c"]])
         #expect(table?.serialized().contains("a\\|b") == true)
+    }
+
+    @Test func findsSelectedTableRangeAndCell() {
+        let text = """
+        Intro
+
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        | a2 | b2 |
+
+        Tail
+        """
+        let ns = text as NSString
+        let selection = MarkdownTable.selection(
+            in: text,
+            selectionRange: ns.range(of: "b2")
+        )
+
+        #expect(selection?.table.header == ["A", "B"])
+        #expect(selection?.selectedRow == 1)
+        #expect(selection?.selectedColumn == 1)
+        #expect(selection.map { ns.substring(with: $0.range) } == "| A | B |\n| --- | --- |\n| a1 | b1 |\n| a2 | b2 |\n")
     }
 }

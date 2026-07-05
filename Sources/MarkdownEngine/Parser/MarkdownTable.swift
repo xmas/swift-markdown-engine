@@ -49,6 +49,56 @@ public struct MarkdownTable: Sendable, Equatable {
         return MarkdownTable(header: header, alignments: alignments, rows: rows)
     }
 
+    public static func selection(in source: String, selectionRange: NSRange) -> MarkdownTableSourceSelection? {
+        let ns = source as NSString
+        let length = ns.length
+        guard length > 0 else { return nil }
+        let caret = min(max(selectionRange.location, 0), length)
+        var lineRanges: [NSRange] = []
+        var cursor = 0
+        while cursor < length {
+            let line = ns.lineRange(for: NSRange(location: cursor, length: 0))
+            lineRanges.append(line)
+            cursor = NSMaxRange(line)
+        }
+
+        func lineText(_ index: Int) -> String {
+            ns.substring(with: lineRanges[index])
+        }
+
+        var index = lineRanges.firstIndex { range in
+            caret >= range.location && caret <= NSMaxRange(range)
+        }
+        if index == nil, caret == length {
+            index = lineRanges.indices.last
+        }
+        guard let selectedLine = index else { return nil }
+
+        for headerIndex in lineRanges.indices {
+            guard headerIndex + 1 < lineRanges.count,
+                  isTableRow(lineText(headerIndex)),
+                  isTableSeparator(lineText(headerIndex + 1)) else { continue }
+
+            var endIndex = headerIndex + 1
+            while endIndex + 1 < lineRanges.count, isTableRow(lineText(endIndex + 1)) {
+                endIndex += 1
+            }
+            guard selectedLine >= headerIndex, selectedLine <= endIndex else { continue }
+
+            let range = union(lineRanges[headerIndex...endIndex])
+            guard let table = parse(ns.substring(with: range)) else { return nil }
+            let selectedRow = selectedLine >= headerIndex + 2 ? selectedLine - headerIndex - 2 : nil
+            let selectedColumn = columnIndex(at: caret, in: lineText(selectedLine), lineStart: lineRanges[selectedLine].location)
+            return MarkdownTableSourceSelection(
+                range: range,
+                table: table,
+                selectedRow: selectedRow,
+                selectedColumn: selectedColumn
+            )
+        }
+        return nil
+    }
+
     public func serialized() -> String {
         var lines: [String] = []
         lines.append(Self.serializedRow(header))
@@ -142,7 +192,7 @@ public struct MarkdownTable: Sendable, Equatable {
     }
 
     private static func parseRow(_ line: String) -> [String] {
-        var s = line.trimmingCharacters(in: .whitespaces)
+        var s = line.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("|") { s.removeFirst() }
         if s.hasSuffix("|") { s.removeLast() }
 
@@ -165,6 +215,49 @@ public struct MarkdownTable: Sendable, Equatable {
         if escaping { current.append("\\") }
         cells.append(current.trimmingCharacters(in: .whitespaces))
         return cells
+    }
+
+    private static func isTableRow(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("|") && trimmed.hasSuffix("|") && trimmed.count >= 3
+    }
+
+    private static func isTableSeparator(_ line: String) -> Bool {
+        let cells = parseRow(line)
+        return !cells.isEmpty && cells.allSatisfy { parseAlignment($0) != nil }
+    }
+
+    private static func columnIndex(at caret: Int, in line: String, lineStart: Int) -> Int? {
+        let lineRelative = max(0, caret - lineStart)
+        let ns = line as NSString
+        var end = ns.length
+        while end > 0 {
+            let ch = ns.character(at: end - 1)
+            guard ch == 0x0A || ch == 0x0D || ch == 0x20 || ch == 0x09 else { break }
+            end -= 1
+        }
+        var i = 0
+        while i < end {
+            let ch = ns.character(at: i)
+            guard ch == 0x20 || ch == 0x09 else { break }
+            i += 1
+        }
+        if i < end, ns.character(at: i) == 0x7C { i += 1 }
+        var column = 0
+        var escaping = false
+        while i < end {
+            let ch = ns.character(at: i)
+            if !escaping, ch == 0x7C {
+                if lineRelative <= i { return column }
+                column += 1
+            } else if !escaping, ch == 0x5C {
+                escaping = true
+            } else {
+                escaping = false
+            }
+            i += 1
+        }
+        return max(0, column)
     }
 
     private static func parseAlignment(_ cell: String) -> MarkdownTableAlignment? {
@@ -204,6 +297,21 @@ public struct MarkdownTable: Sendable, Equatable {
     }
 }
 
+public struct MarkdownTableSourceSelection: Sendable, Equatable {
+    public let range: NSRange
+    public let table: MarkdownTable
+    /// Zero-based body row index. `nil` means the caret is in the header or separator row.
+    public let selectedRow: Int?
+    public let selectedColumn: Int?
+
+    public init(range: NSRange, table: MarkdownTable, selectedRow: Int?, selectedColumn: Int?) {
+        self.range = range
+        self.table = table
+        self.selectedRow = selectedRow
+        self.selectedColumn = selectedColumn
+    }
+}
+
 private extension MarkdownTableAlignment {
     var separatorCell: String {
         switch self {
@@ -212,4 +320,9 @@ private extension MarkdownTableAlignment {
         case .right: return "---:"
         }
     }
+}
+
+private func union(_ ranges: ArraySlice<NSRange>) -> NSRange {
+    guard let first = ranges.first, let last = ranges.last else { return NSRange(location: 0, length: 0) }
+    return NSRange(location: first.location, length: NSMaxRange(last) - first.location)
 }

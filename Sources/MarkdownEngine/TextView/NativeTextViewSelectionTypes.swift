@@ -7,6 +7,7 @@
 //  Public selection / replacement value types exposed by NativeTextViewWrapper.
 //
 
+import CoreGraphics
 import Foundation
 
 /// A range of text occupied by a wiki-link `[[Name]]`, in both the display
@@ -84,5 +85,33 @@ public struct InlineReplacementRequest: Sendable {
         self.selection = selection
         self.storageFragment = storageFragment
         self.isImageEmbedMode = isImageEmbedMode
+    }
+}
+
+/// Snapshot of the table block containing the caret.
+public struct MarkdownTableSelection: Sendable, Equatable {
+    /// Source range of the complete table in display/source coordinates.
+    public let range: NSRange
+    /// Parsed table model for GUI editing.
+    public let table: MarkdownTable
+    /// Zero-based body row index, or `nil` when the caret is in the header/separator.
+    public let selectedRow: Int?
+    /// Zero-based column index if the caret is inside a cell.
+    public let selectedColumn: Int?
+    /// Best-effort table rect in the text view's coordinate space.
+    public let rect: CGRect?
+
+    public init(
+        range: NSRange,
+        table: MarkdownTable,
+        selectedRow: Int?,
+        selectedColumn: Int?,
+        rect: CGRect?
+    ) {
+        self.range = range
+        self.table = table
+        self.selectedRow = selectedRow
+        self.selectedColumn = selectedColumn
+        self.rect = rect
     }
 }

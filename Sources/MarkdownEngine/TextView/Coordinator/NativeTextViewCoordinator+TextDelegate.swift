@@ -179,6 +179,7 @@ extension NativeTextViewCoordinator {
 
         restyleTextView(tv, paragraphCandidates: effectiveParagraphCandidates, tokens: tokens)
         updateCodeBlockSelection(textView: tv, tokens: tokens)
+        updateTableSelection(textView: tv)
         if wtActive {
             previousActiveTokenIndices = activeTokenIndices
             return
@@ -372,6 +373,7 @@ extension NativeTextViewCoordinator {
         if !shouldSkipSelectionRestyle {
             updateCodeBlockSelection(textView: tv, tokens: tokens)
         }
+        updateTableSelection(textView: tv)
     }
 
     public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
