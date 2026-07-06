@@ -433,6 +433,9 @@ extension NativeTextViewCoordinator {
     }
 
     public func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if handleTableCommand(textView: textView, commandSelector: commandSelector) {
+            return true
+        }
         if commandSelector == #selector(NSResponder.insertBacktab(_:)) {
             return handleBacktab(textView)
         }

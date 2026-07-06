@@ -15,12 +15,14 @@ extension NativeTextViewCoordinator {
               let rangeValue = notification.userInfo?["range"] as? NSValue,
               let row = notification.userInfo?["row"] as? Int,
               let column = notification.userInfo?["column"] as? Int,
-              let location = MarkdownTable.cellContentLocation(
+              let cellRange = MarkdownTable.cellContentRange(
                 in: textView.string,
                 tableRange: rangeValue.rangeValue,
                 row: row,
                 column: column
               ) else { return }
+        let offset = notification.userInfo?["offset"] as? Int ?? 0
+        let location = cellRange.location + min(max(offset, 0), cellRange.length)
 
         textView.window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: location, length: 0))
@@ -83,6 +85,13 @@ extension NativeTextViewCoordinator {
         if let target = MarkdownTable.editTarget(in: source, selectionRange: textView.selectedRange()),
            target.tableRange == tableRange,
            target.cellRange.containsOrTouches(affectedCharRange) {
+            if let sanitized = sanitizedTableCellReplacement(replacementString), sanitized != replacementString {
+                isProgrammaticEdit = true
+                defer { isProgrammaticEdit = false }
+                textView.insertText(sanitized, replacementRange: affectedCharRange)
+                updateTableSelection(textView: textView)
+                return false
+            }
             return true
         }
 
@@ -101,6 +110,46 @@ extension NativeTextViewCoordinator {
         )
         updateTableSelection(textView: textView)
         return false
+    }
+
+    func handleTableCommand(textView: NSTextView, commandSelector: Selector) -> Bool {
+        let direction: MarkdownTable.CellNavigationDirection?
+        switch commandSelector {
+        case #selector(NSResponder.insertNewline(_:)):
+            direction = .down
+        case #selector(NSResponder.insertTab(_:)):
+            direction = .right
+        case #selector(NSResponder.insertBacktab(_:)):
+            direction = .left
+        default:
+            direction = nil
+        }
+        guard let direction else { return false }
+        guard MarkdownTable.selection(in: textView.string, selectionRange: textView.selectedRange()) != nil else {
+            return false
+        }
+
+        if textView.selectedRange().length == 0,
+           let location = MarkdownTable.cellNavigationLocation(
+            in: textView.string,
+            selectionRange: textView.selectedRange(),
+            direction: direction
+           ) {
+            textView.window?.makeFirstResponder(textView)
+            textView.setSelectedRange(NSRange(location: min(max(location, 0), (textView.string as NSString).length), length: 0))
+            updateTableSelection(textView: textView)
+        }
+        return true
+    }
+
+    private func sanitizedTableCellReplacement(_ replacementString: String?) -> String? {
+        guard var replacementString else { return nil }
+        replacementString = replacementString
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "|", with: "\\|")
+        return replacementString
     }
 }
 

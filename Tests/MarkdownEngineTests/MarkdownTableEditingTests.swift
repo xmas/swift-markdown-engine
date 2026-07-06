@@ -176,6 +176,70 @@ struct MarkdownTableEditingTests {
         #expect(textView.string.contains("| --- | --- |"))
     }
 
+    @Test func protectedCellEditSanitizesTableBreakingCharacters() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let ns = text as NSString
+        let textView = NativeTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        let coordinator = NativeTextViewCoordinator(
+            text: .constant(""),
+            fontName: "SF Pro Text",
+            fontSize: 14,
+            isWikiLinkActive: .constant(false),
+            onLinkClick: nil,
+            onInlineSelectionChange: nil
+        )
+        coordinator.textView = textView
+        textView.string = text
+        textView.setSelectedRange(NSRange(location: ns.range(of: "a1").location + 2, length: 0))
+        textView.delegate = coordinator
+
+        let allowed = coordinator.textView(
+            textView,
+            shouldChangeTextIn: textView.selectedRange(),
+            replacementString: "\n|"
+        )
+
+        #expect(!allowed)
+        #expect(textView.string.contains("| a1 \\| | b1 |"))
+        #expect(MarkdownTable.selection(
+            in: textView.string,
+            selectionRange: (textView.string as NSString).range(of: "b1")
+        ) != nil)
+    }
+
+    @Test func enterKeyInsideTableNavigatesWithoutChangingSource() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        | a2 | b2 |
+        """
+        let ns = text as NSString
+        let textView = NativeTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        let coordinator = NativeTextViewCoordinator(
+            text: .constant(""),
+            fontName: "SF Pro Text",
+            fontSize: 14,
+            isWikiLinkActive: .constant(false),
+            onLinkClick: nil,
+            onInlineSelectionChange: nil
+        )
+        coordinator.textView = textView
+        textView.string = text
+        textView.setSelectedRange(ns.range(of: "a1"))
+        textView.delegate = coordinator
+
+        let handled = coordinator.textView(textView, doCommandBy: #selector(NSResponder.insertNewline(_:)))
+
+        #expect(handled)
+        #expect(textView.string == text)
+        #expect(textView.selectedRange() == NSRange(location: ns.range(of: "a2").location, length: 0))
+    }
+
     @Test func selectionOnTableSyntaxRemapsToCellContent() {
         let text = """
         | A | B |
