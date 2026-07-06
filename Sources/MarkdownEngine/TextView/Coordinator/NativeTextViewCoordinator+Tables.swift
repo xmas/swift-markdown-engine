@@ -29,6 +29,19 @@ extension NativeTextViewCoordinator {
         updateTableSelection(textView: textView)
     }
 
+    func handleSelectRangeNotification(_ notification: Notification) {
+        guard let textView,
+              let rangeValue = notification.userInfo?["range"] as? NSValue else { return }
+        let sourceLength = (textView.string as NSString).length
+        let requested = rangeValue.rangeValue
+        let location = min(max(requested.location, 0), sourceLength)
+        let length = min(max(requested.length, 0), sourceLength - location)
+
+        textView.window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: location, length: length))
+        updateTableSelection(textView: textView)
+    }
+
     func updateTableSelection(textView: NSTextView) {
         let source = textView.string
         guard let sourceSelection = MarkdownTable.selection(
