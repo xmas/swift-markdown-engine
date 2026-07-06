@@ -480,6 +480,26 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
                 context.coordinator.restyleParagraphs([fullRange], in: textView)
             }
         }
+        let oldHiddenRenderedTableRange = context.coordinator.configuration.hiddenRenderedTableRange
+        let renderedTableVisibilityChanged = oldHiddenRenderedTableRange != configuration.hiddenRenderedTableRange
+        if renderedTableVisibilityChanged {
+            context.coordinator.configuration.hiddenRenderedTableRange = configuration.hiddenRenderedTableRange
+            textView.configuration.hiddenRenderedTableRange = configuration.hiddenRenderedTableRange
+            let nsLength = (textView.string as NSString).length
+            var ranges: [NSRange] = []
+            if let oldHiddenRenderedTableRange, NSMaxRange(oldHiddenRenderedTableRange) <= nsLength {
+                ranges.append(oldHiddenRenderedTableRange)
+            }
+            if let hiddenRenderedTableRange = configuration.hiddenRenderedTableRange,
+               NSMaxRange(hiddenRenderedTableRange) <= nsLength {
+                ranges.append(hiddenRenderedTableRange)
+            }
+            let restyleRanges = ranges.isEmpty ? [NSRange(location: 0, length: nsLength)] : ranges
+            if nsLength > 0 {
+                context.coordinator.restyleParagraphs(restyleRanges, in: textView)
+            }
+            textView.updateWideTableOverlays()
+        }
         textView.isEditable = isEditable
         textView.isSelectable = true
         textView.insertionPointColor = isEditable ? context.coordinator.configuration.theme.bodyText : .clear
@@ -498,7 +518,8 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         }
         if context.coordinator.didInitialFormatting
             && context.coordinator.lastSyncedText == text
-            && !fontChanged {
+            && !fontChanged
+            && !renderedTableVisibilityChanged {
             return
         }
         if fontChanged {

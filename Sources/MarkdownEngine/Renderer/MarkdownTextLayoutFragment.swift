@@ -17,6 +17,7 @@ extension NSAttributedString.Key {
     static let latexBounds = NSAttributedString.Key("LatexImageBounds")
     static let latexIsBlock = NSAttributedString.Key("LatexIsBlock")
     static let latexBlockOffsetY = NSAttributedString.Key("LatexBlockOffsetY")
+    static let renderedBlockHidden = NSAttributedString.Key("RenderedBlockHidden")
     static let thematicBreak = NSAttributedString.Key("ThematicBreak")
     /// Int nesting level (1-based) of a blockquote line; the fragment
     /// paints that many vertical bars in the left gutter.
@@ -361,6 +362,9 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
 
         ts.enumerateAttribute(.latexImage, in: range, options: []) { [weak self] value, attrRange, _ in
             guard let self, let image = value as? NSImage else { return }
+            if ts.attribute(.renderedBlockHidden, at: attrRange.location, effectiveRange: nil) as? Bool == true {
+                return
+            }
 
             // Skip overlay-rendered blocks; WideTableOverlay owns the visual.
             if ts.attribute(.scrollableBlockNaturalWidth, at: attrRange.location, effectiveRange: nil) != nil {

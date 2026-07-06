@@ -63,6 +63,9 @@ extension MarkdownStyler {
                     sourceID: computedSourceID
                 )
                 : .collapsedSource(markerTexts: [])
+            let hiddenRange = ctx.configuration.hiddenRenderedTableRange
+            let shouldHideRenderedTable = hiddenRange?.location == token.range.location
+                && hiddenRange?.length == token.range.length
             _ = appendRenderedStandaloneBlock(
                 for: token,
                 rawContent: source,
@@ -72,6 +75,7 @@ extension MarkdownStyler {
                 paragraphSpacing: ctx.baseDefaultLineHeight * 0.5,
                 alignment: .left,
                 mode: mode,
+                renderedBlockHidden: shouldHideRenderedTable,
                 ctx: ctx,
                 attrs: &attrs
             )

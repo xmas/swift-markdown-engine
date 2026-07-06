@@ -47,6 +47,8 @@ public struct MarkdownEditorConfiguration: Sendable {
     public var textInsets: TextInsets
     /// Centered reading-column width; wide tables break out to full width. nil = full width (default).
     public var readingWidth: CGFloat?
+    /// Source range of a rendered table whose image should be hidden while an external editor owns it.
+    public var hiddenRenderedTableRange: NSRange?
     public var spellChecking: SpellCheckingPolicy
     /// How the editor resolves its own height.
     ///
@@ -86,6 +88,7 @@ public struct MarkdownEditorConfiguration: Sendable {
         scrollers: ScrollersPolicy = .default,
         textInsets: TextInsets = .default,
         readingWidth: CGFloat? = nil,
+        hiddenRenderedTableRange: NSRange? = nil,
         spellChecking: SpellCheckingPolicy = .default,
         heightBehavior: HeightBehavior = .scrolls
     ) {
@@ -109,6 +112,7 @@ public struct MarkdownEditorConfiguration: Sendable {
         self.scrollers = scrollers
         self.textInsets = textInsets
         self.readingWidth = readingWidth
+        self.hiddenRenderedTableRange = hiddenRenderedTableRange
         self.spellChecking = spellChecking
         self.heightBehavior = heightBehavior
     }

@@ -249,6 +249,9 @@ extension NativeTextView {
         storage.enumerateAttribute(.scrollableBlockSourceID, in: fullRange, options: []) { value, attrRange, _ in
             guard let sourceID = value as? Int,
                   let image = storage.attribute(.latexImage, at: attrRange.location, effectiveRange: nil) as? NSImage else { return }
+            if storage.attribute(.renderedBlockHidden, at: attrRange.location, effectiveRange: nil) as? Bool == true {
+                return
+            }
             seenSourceIDs.insert(sourceID)
 
             if let start = tcs.location(tcs.documentRange.location, offsetBy: attrRange.location),

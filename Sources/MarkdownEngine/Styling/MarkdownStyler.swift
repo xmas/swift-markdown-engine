@@ -128,6 +128,7 @@ extension MarkdownStyler {
         paragraphSpacing: CGFloat,
         alignment: NSTextAlignment,
         mode: RenderedStandaloneBlockMode,
+        renderedBlockHidden: Bool = false,
         ctx: StylingContext,
         attrs: inout [StyledRange]
     ) -> Bool {
@@ -151,6 +152,7 @@ extension MarkdownStyler {
                 advanceWidth: imageBounds.width,
                 neededLineHeight: imageBounds.height,
                 extraAnchorAttrs: [:],
+                renderedBlockHidden: renderedBlockHidden,
                 markerTexts: markerTexts,
                 ctx: ctx,
                 attrs: &attrs
@@ -175,6 +177,7 @@ extension MarkdownStyler {
                     .scrollableBlockTotalHeight: totalHeight,
                     .scrollableBlockFullRange: NSValue(range: paraRange)
                 ],
+                renderedBlockHidden: renderedBlockHidden,
                 markerTexts: markerTexts,
                 ctx: ctx,
                 attrs: &attrs
@@ -190,7 +193,8 @@ extension MarkdownStyler {
                 .latexImage: image,
                 .latexBounds: NSValue(rect: imageBounds),
                 .latexIsBlock: true,
-                .latexBlockOffsetY: baseLineHeight + imageGap
+                .latexBlockOffsetY: baseLineHeight + imageGap,
+                .renderedBlockHidden: renderedBlockHidden
             ]))
             appendSecondaryMarkers(for: token, to: &attrs, theme: ctx.configuration.theme)
         }
@@ -210,6 +214,7 @@ extension MarkdownStyler {
         advanceWidth: CGFloat,
         neededLineHeight: CGFloat,
         extraAnchorAttrs: [NSAttributedString.Key: Any],
+        renderedBlockHidden: Bool,
         markerTexts: [String],
         ctx: StylingContext,
         attrs: inout [StyledRange]
@@ -259,6 +264,7 @@ extension MarkdownStyler {
             .latexImage: image,
             .latexBounds: NSValue(rect: imageBounds),
             .latexIsBlock: true,
+            .renderedBlockHidden: renderedBlockHidden,
             .foregroundColor: NSColor.clear,
             .font: ctx.latexMarkerFont,
             .kern: advanceWidth - HeadingHelpers.textWidth(anchorChar, font: ctx.latexMarkerFont)
