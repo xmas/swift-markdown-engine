@@ -79,6 +79,21 @@ struct MarkdownTableEditingTests {
         #expect(table?.serialized().contains("a\\|b") == true)
     }
 
+    @Test func brCellsRoundTripAsEditableNewlines() {
+        let table = MarkdownTable.parse("""
+        | A | B |
+        | --- | --- |
+        | alpha<br>- child | beta<br />second |
+        """)
+
+        #expect(table?.rows == [["alpha\n- child", "beta\nsecond"]])
+        #expect(table?.serialized() == """
+        | A | B |
+        | --- | --- |
+        | alpha<br>- child | beta<br>second |
+        """)
+    }
+
     @Test func findsSelectedTableRangeAndCell() {
         let text = """
         Intro

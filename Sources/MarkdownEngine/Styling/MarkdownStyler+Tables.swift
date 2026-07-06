@@ -44,6 +44,7 @@ extension MarkdownStyler {
                 parsed,
                 baseFont: ctx.baseFont,
                 theme: ctx.configuration.theme,
+                listIndentPerLevel: ctx.configuration.lists.indentPerLevel,
                 codeBackgroundColor: ctx.codeBackgroundColor,
                 latex: ctx.services.latex,
                 appearance: renderAppearance
@@ -97,6 +98,7 @@ extension MarkdownStyler {
         baseFont: NSFont,
         header: Bool,
         theme: MarkdownEditorTheme,
+        listIndentPerLevel: CGFloat = MarkdownEditorConfiguration.default.lists.indentPerLevel,
         codeBackgroundColor: NSColor,
         latex: any LatexRenderer
     ) -> NSAttributedString {
@@ -107,10 +109,17 @@ extension MarkdownStyler {
             ? (NSFont(descriptor: descriptor.withSymbolicTraits(.bold), size: pointSize) ?? baseFont)
             : baseFont
         let out = NSMutableAttributedString()
-        appendInlineCell(
-            InlineParser.parse(raw), in: raw as NSString, into: out,
-            font: startFont, baseDescriptor: descriptor, pointSize: pointSize,
-            codeFont: codeFont, theme: theme, codeBackgroundColor: codeBackgroundColor, latex: latex
+        appendFormattedCellLines(
+            raw,
+            into: out,
+            font: startFont,
+            baseDescriptor: descriptor,
+            pointSize: pointSize,
+            codeFont: codeFont,
+            theme: theme,
+            listIndentPerLevel: listIndentPerLevel,
+            codeBackgroundColor: codeBackgroundColor,
+            latex: latex
         )
         return out
     }
@@ -127,6 +136,96 @@ extension MarkdownStyler {
         case .boldItalic: traits.formUnion([.bold, .italic])
         }
         return NSFont(descriptor: baseDescriptor.withSymbolicTraits(traits), size: pointSize) ?? current
+    }
+
+    private static func appendFormattedCellLines(
+        _ raw: String,
+        into out: NSMutableAttributedString,
+        font: NSFont,
+        baseDescriptor: NSFontDescriptor,
+        pointSize: CGFloat,
+        codeFont: NSFont,
+        theme: MarkdownEditorTheme,
+        listIndentPerLevel: CGFloat,
+        codeBackgroundColor: NSColor,
+        latex: any LatexRenderer
+    ) {
+        let lines = raw.components(separatedBy: .newlines)
+        for (index, line) in lines.enumerated() {
+            if index > 0 {
+                out.append(NSAttributedString(string: "\n", attributes: [
+                    .font: font,
+                    .foregroundColor: theme.bodyText
+                ]))
+            }
+            if appendCellBulletLine(
+                line,
+                into: out,
+                font: font,
+                baseDescriptor: baseDescriptor,
+                pointSize: pointSize,
+                codeFont: codeFont,
+                theme: theme,
+                listIndentPerLevel: listIndentPerLevel,
+                codeBackgroundColor: codeBackgroundColor,
+                latex: latex
+            ) {
+                continue
+            }
+            appendInlineCell(
+                InlineParser.parse(line), in: line as NSString, into: out,
+                font: font, baseDescriptor: baseDescriptor, pointSize: pointSize,
+                codeFont: codeFont, theme: theme, codeBackgroundColor: codeBackgroundColor, latex: latex
+            )
+        }
+    }
+
+    private static func appendCellBulletLine(
+        _ line: String,
+        into out: NSMutableAttributedString,
+        font: NSFont,
+        baseDescriptor: NSFontDescriptor,
+        pointSize: CGFloat,
+        codeFont: NSFont,
+        theme: MarkdownEditorTheme,
+        listIndentPerLevel: CGFloat,
+        codeBackgroundColor: NSColor,
+        latex: any LatexRenderer
+    ) -> Bool {
+        let nsLine = line as NSString
+        let pattern = #"^([ \t]*)([-*+]|\d+[.)])\s+(.*)$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)),
+              match.numberOfRanges == 4 else {
+            return false
+        }
+
+        let leadingWhitespace = nsLine.substring(with: match.range(at: 1))
+        let marker = nsLine.substring(with: match.range(at: 2))
+        let content = nsLine.substring(with: match.range(at: 3))
+        let nestingLevel = max(0, leadingWhitespace.filter { $0 == " " || $0 == "\t" }.count / 2)
+        let markerString = (marker.first?.isNumber == true ? marker : "•") + " "
+        let markerWidth = (markerString as NSString).size(withAttributes: [.font: font]).width
+        let indent = max(0, listIndentPerLevel) * CGFloat(nestingLevel + 1)
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.firstLineHeadIndent = indent
+        paragraph.headIndent = indent + markerWidth + 4
+        paragraph.tabStops = []
+        paragraph.defaultTabInterval = max(1, listIndentPerLevel)
+
+        let start = out.length
+        out.append(NSAttributedString(string: markerString, attributes: [
+            .font: font,
+            .foregroundColor: theme.bodyText
+        ]))
+        appendInlineCell(
+            InlineParser.parse(content), in: content as NSString, into: out,
+            font: font, baseDescriptor: baseDescriptor, pointSize: pointSize,
+            codeFont: codeFont, theme: theme, codeBackgroundColor: codeBackgroundColor, latex: latex
+        )
+        out.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: start, length: out.length - start))
+        return true
     }
 
     /// Walk the inline AST into marker-stripped runs; LaTeX as attachments, links/embeds emitted raw.
@@ -204,6 +303,7 @@ extension MarkdownStyler {
         _ table: ParsedTable,
         baseFont: NSFont,
         theme: MarkdownEditorTheme,
+        listIndentPerLevel: CGFloat,
         codeBackgroundColor: NSColor,
         latex: any LatexRenderer,
         appearance: NSAppearance
@@ -228,6 +328,7 @@ extension MarkdownStyler {
         let headerCells = table.header.map {
             formattedCellString(
                 $0, baseFont: baseFont, header: true, theme: theme,
+                listIndentPerLevel: listIndentPerLevel,
                 codeBackgroundColor: codeBackgroundColor, latex: latex
             )
         }
@@ -235,6 +336,7 @@ extension MarkdownStyler {
             row.map {
                 formattedCellString(
                     $0, baseFont: baseFont, header: false, theme: theme,
+                    listIndentPerLevel: listIndentPerLevel,
                     codeBackgroundColor: codeBackgroundColor, latex: latex
                 )
             }
@@ -332,11 +434,7 @@ extension MarkdownStyler {
                 }
                 paragraph.lineBreakMode = .byClipping
                 let aligned = NSMutableAttributedString(attributedString: s)
-                aligned.addAttribute(
-                    .paragraphStyle,
-                    value: paragraph,
-                    range: NSRange(location: 0, length: aligned.length)
-                )
+                aligned.applyTableCellParagraphDefaults(paragraph)
                 let cellInnerTop = rowTop[row] + max(0, (rowHeight - lineHeight) / 2)
                 let drawRect = NSRect(
                     x: cellLeft,
@@ -392,5 +490,19 @@ extension MarkdownStyler {
         hasher.combine(source)
         hasher.combine(occurrenceIndex)
         return hasher.finalize()
+    }
+}
+
+private extension NSMutableAttributedString {
+    func applyTableCellParagraphDefaults(_ defaults: NSParagraphStyle) {
+        guard length > 0 else { return }
+        enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: length)) { value, range, _ in
+            let paragraph = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle
+                ?? defaults.mutableCopy() as? NSMutableParagraphStyle
+                ?? NSMutableParagraphStyle()
+            paragraph.alignment = defaults.alignment
+            paragraph.lineBreakMode = defaults.lineBreakMode
+            addAttribute(.paragraphStyle, value: paragraph, range: range)
+        }
     }
 }

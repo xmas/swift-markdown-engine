@@ -365,15 +365,23 @@ public struct MarkdownTable: Sendable, Equatable {
             } else if ch == "\\" {
                 escaping = true
             } else if ch == "|" {
-                cells.append(current.trimmingCharacters(in: .whitespaces))
+                cells.append(decodedCell(current.trimmingCharacters(in: .whitespaces)))
                 current.removeAll(keepingCapacity: true)
             } else {
                 current.append(ch)
             }
         }
         if escaping { current.append("\\") }
-        cells.append(current.trimmingCharacters(in: .whitespaces))
+        cells.append(decodedCell(current.trimmingCharacters(in: .whitespaces)))
         return cells
+    }
+
+    private static func decodedCell(_ cell: String) -> String {
+        cell.replacingOccurrences(
+            of: #"<br\s*/?>"#,
+            with: "\n",
+            options: [.regularExpression, .caseInsensitive]
+        )
     }
 
     private static func isTableRow(_ line: String) -> Bool {
@@ -495,10 +503,10 @@ public struct MarkdownTable: Sendable, Equatable {
 
     private static func escapedCell(_ cell: String) -> String {
         cell
-            .replacingOccurrences(of: "\r\n", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
             .replacingOccurrences(of: "|", with: "\\|")
+            .replacingOccurrences(of: "\n", with: "<br>")
     }
 
     private static func padded<T>(_ values: [T], to count: Int, with fill: T) -> [T] {

@@ -136,12 +136,11 @@ extension NativeTextViewCoordinator {
             return false
         }
 
-        if textView.selectedRange().length == 0,
-           let location = MarkdownTable.cellNavigationLocation(
+        if let location = MarkdownTable.cellNavigationLocation(
             in: textView.string,
             selectionRange: textView.selectedRange(),
             direction: direction
-           ) {
+        ) {
             textView.window?.makeFirstResponder(textView)
             textView.setSelectedRange(NSRange(location: min(max(location, 0), (textView.string as NSString).length), length: 0))
             updateTableSelection(textView: textView)

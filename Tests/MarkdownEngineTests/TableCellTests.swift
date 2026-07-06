@@ -15,12 +15,13 @@ import Testing
 @Suite("Table cell inline formatting")
 struct TableCellTests {
 
-    private func cell(_ raw: String, header: Bool = false) -> NSAttributedString {
+    private func cell(_ raw: String, header: Bool = false, listIndentPerLevel: CGFloat = 27.5) -> NSAttributedString {
         _ = NSApplication.shared
         let cfg = MarkdownEditorConfiguration.default
         return MarkdownStyler.formattedCellString(
             raw, baseFont: NSFont.systemFont(ofSize: 14), header: header,
-            theme: cfg.theme, codeBackgroundColor: .clear, latex: cfg.services.latex
+            theme: cfg.theme, listIndentPerLevel: listIndentPerLevel,
+            codeBackgroundColor: .clear, latex: cfg.services.latex
         )
     }
 
@@ -69,6 +70,16 @@ struct TableCellTests {
 
     @Test func headerCellStartsBold() {
         #expect(traits(cell("h", header: true), "h").contains(.bold))
+    }
+
+    @Test func cellBulletsUseConfiguredVisualIndent() {
+        let s = cell("intro\n- child", listIndentPerLevel: 44)
+        let childRange = (s.string as NSString).range(of: "• child")
+        let paragraph = s.attribute(.paragraphStyle, at: childRange.location, effectiveRange: nil) as? NSParagraphStyle
+
+        #expect(s.string == "intro\n• child")
+        #expect(paragraph?.firstLineHeadIndent == 44)
+        #expect((paragraph?.headIndent ?? 0) > 44)
     }
 
     /// The headline win: the old per-cell regex `\*\*([^*]+)\*\*` cannot match
