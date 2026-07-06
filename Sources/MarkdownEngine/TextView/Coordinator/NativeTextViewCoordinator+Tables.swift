@@ -36,10 +36,15 @@ extension NativeTextViewCoordinator {
         let requested = rangeValue.rangeValue
         let location = min(max(requested.location, 0), sourceLength)
         let length = min(max(requested.length, 0), sourceLength - location)
+        let updateTableSelectionAfterMove = notification.userInfo?["updateTableSelection"] as? Bool ?? true
 
         textView.window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: location, length: length))
-        updateTableSelection(textView: textView)
+        if updateTableSelectionAfterMove {
+            updateTableSelection(textView: textView)
+        } else {
+            onTableSelectionChange?(nil)
+        }
     }
 
     func updateTableSelection(textView: NSTextView) {
