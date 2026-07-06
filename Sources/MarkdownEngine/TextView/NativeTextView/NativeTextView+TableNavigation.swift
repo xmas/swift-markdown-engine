@@ -14,7 +14,8 @@ extension NativeTextView {
               let location = MarkdownTable.cellNavigationLocation(
                 in: string,
                 selectionRange: selectedRange(),
-                direction: direction
+                direction: direction,
+                onlyNavigateHorizontallyAtCellBoundary: true
               ) else { return false }
 
         window?.makeFirstResponder(self)

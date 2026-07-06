@@ -116,12 +116,26 @@ public struct MarkdownTable: Sendable, Equatable {
     static func cellNavigationLocation(
         in source: String,
         selectionRange: NSRange,
-        direction: CellNavigationDirection
+        direction: CellNavigationDirection,
+        onlyNavigateHorizontallyAtCellBoundary: Bool = false
     ) -> Int? {
         guard let selection = selection(in: source, selectionRange: selectionRange) else { return nil }
         let columnCount = max(1, selection.table.columnCount)
         let currentRow = selection.selectedRow ?? -1
         let currentColumn = min(max(selection.selectedColumn ?? 0, 0), columnCount - 1)
+
+        if onlyNavigateHorizontallyAtCellBoundary {
+            switch direction {
+            case .left:
+                guard let target = editTarget(in: source, selectionRange: selectionRange),
+                      selectionRange.location <= target.cellRange.location else { return nil }
+            case .right:
+                guard let target = editTarget(in: source, selectionRange: selectionRange),
+                      selectionRange.location >= NSMaxRange(target.cellRange) else { return nil }
+            case .up, .down:
+                break
+            }
+        }
 
         let target: (row: Int, column: Int)?
         switch direction {

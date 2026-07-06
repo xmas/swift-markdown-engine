@@ -305,6 +305,54 @@ struct MarkdownTableEditingTests {
         #expect(rightFromLastBodyCell == ns.range(of: "After").location)
     }
 
+    @Test func horizontalArrowNavigationRequiresCellBoundaryWhenEditing() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | alpha | beta |
+        """
+        let ns = text as NSString
+        let alphaRange = ns.range(of: "alpha")
+        let betaRange = ns.range(of: "beta")
+
+        let rightInsideAlpha = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: NSRange(location: alphaRange.location + 2, length: 0),
+            direction: .right,
+            onlyNavigateHorizontallyAtCellBoundary: true
+        )
+        let rightAtEndOfAlpha = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: NSRange(location: NSMaxRange(alphaRange), length: 0),
+            direction: .right,
+            onlyNavigateHorizontallyAtCellBoundary: true
+        )
+        let leftInsideBeta = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: NSRange(location: betaRange.location + 2, length: 0),
+            direction: .left,
+            onlyNavigateHorizontallyAtCellBoundary: true
+        )
+        let leftAtStartOfBeta = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: NSRange(location: betaRange.location, length: 0),
+            direction: .left,
+            onlyNavigateHorizontallyAtCellBoundary: true
+        )
+        let downInsideHeader = MarkdownTable.cellNavigationLocation(
+            in: text,
+            selectionRange: NSRange(location: ns.range(of: "A").location, length: 0),
+            direction: .down,
+            onlyNavigateHorizontallyAtCellBoundary: true
+        )
+
+        #expect(rightInsideAlpha == nil)
+        #expect(rightAtEndOfAlpha == betaRange.location)
+        #expect(leftInsideBeta == nil)
+        #expect(leftAtStartOfBeta == alphaRange.location)
+        #expect(downInsideHeader == alphaRange.location)
+    }
+
     @Test func activeTablesStayRenderedForToolbarEditing() {
         _ = NSApplication.shared
         let text = """
