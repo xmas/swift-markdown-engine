@@ -226,6 +226,39 @@ struct MarkdownTableEditingTests {
         ) != nil)
     }
 
+    @Test func hiddenRenderedTableBlocksDirectSourceEdits() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let ns = text as NSString
+        let tableRange = ns.range(of: text)
+        let textView = NativeTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        let coordinator = NativeTextViewCoordinator(
+            text: .constant(""),
+            fontName: "SF Pro Text",
+            fontSize: 14,
+            isWikiLinkActive: .constant(false),
+            onLinkClick: nil,
+            onInlineSelectionChange: nil
+        )
+        coordinator.configuration.hiddenRenderedTableRange = tableRange
+        coordinator.textView = textView
+        textView.string = text
+        textView.setSelectedRange(NSRange(location: ns.range(of: "a1").location + 2, length: 0))
+        textView.delegate = coordinator
+
+        let allowed = coordinator.textView(
+            textView,
+            shouldChangeTextIn: textView.selectedRange(),
+            replacementString: "x"
+        )
+
+        #expect(!allowed)
+        #expect(textView.string == text)
+    }
+
     @Test func enterKeyInsideTableNavigatesWithoutChangingSource() {
         let text = """
         | A | B |

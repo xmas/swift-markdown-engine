@@ -106,6 +106,11 @@ extension NativeTextViewCoordinator {
         guard let tableRange = MarkdownTable.tableRangeContainingEdit(affectedCharRange, in: source) else {
             return nil
         }
+        if let hiddenRange = configuration.hiddenRenderedTableRange,
+           hiddenRange.location == tableRange.location,
+           hiddenRange.containsOrTouches(affectedCharRange) {
+            return false
+        }
 
         if let target = MarkdownTable.editTarget(in: source, selectionRange: textView.selectedRange()),
            target.tableRange == tableRange,
