@@ -339,6 +339,22 @@ struct MarkdownTableEditingTests {
         #expect(selection == nil)
     }
 
+    @Test func caretAtTableEndOfDocumentIsOutsideTable() {
+        let text = """
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        """
+        let ns = text as NSString
+
+        let selection = MarkdownTable.selection(
+            in: text,
+            selectionRange: NSRange(location: ns.length, length: 0)
+        )
+
+        #expect(selection == nil)
+    }
+
     @Test func horizontalArrowNavigationRequiresCellBoundaryWhenEditing() {
         let text = """
         | A | B |

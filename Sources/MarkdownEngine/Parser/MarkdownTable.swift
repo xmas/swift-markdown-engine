@@ -66,11 +66,8 @@ public struct MarkdownTable: Sendable, Equatable {
             ns.substring(with: lineRanges[index])
         }
 
-        var index = lineRanges.firstIndex { range in
+        let index = lineRanges.firstIndex { range in
             caret >= range.location && caret < NSMaxRange(range)
-        }
-        if index == nil, caret == length {
-            index = lineRanges.indices.last
         }
         guard let selectedLine = index else { return nil }
 
