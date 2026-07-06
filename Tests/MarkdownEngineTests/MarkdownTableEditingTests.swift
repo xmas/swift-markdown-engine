@@ -320,6 +320,25 @@ struct MarkdownTableEditingTests {
         #expect(rightFromLastBodyCell == ns.range(of: "After").location)
     }
 
+    @Test func caretAtTableEndIsOutsideTable() {
+        let text = """
+        Before
+        | A | B |
+        | --- | --- |
+        | a1 | b1 |
+        After
+        """
+        let ns = text as NSString
+        let tableRange = ns.range(of: "| A | B |\n| --- | --- |\n| a1 | b1 |\n")
+
+        let selection = MarkdownTable.selection(
+            in: text,
+            selectionRange: NSRange(location: NSMaxRange(tableRange), length: 0)
+        )
+
+        #expect(selection == nil)
+    }
+
     @Test func horizontalArrowNavigationRequiresCellBoundaryWhenEditing() {
         let text = """
         | A | B |

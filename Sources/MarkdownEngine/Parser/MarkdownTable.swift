@@ -67,7 +67,7 @@ public struct MarkdownTable: Sendable, Equatable {
         }
 
         var index = lineRanges.firstIndex { range in
-            caret >= range.location && caret <= NSMaxRange(range)
+            caret >= range.location && caret < NSMaxRange(range)
         }
         if index == nil, caret == length {
             index = lineRanges.indices.last
