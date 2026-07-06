@@ -43,11 +43,18 @@ extension NativeTextViewCoordinator {
             forCharacterRange: sourceSelection.range,
             using: layoutBridge
         ) ?? textView.viewRect(forCharacterRange: sourceSelection.range, using: layoutBridge)
+        let selectedCellOffset = MarkdownTable.editTarget(
+            in: source,
+            selectionRange: textView.selectedRange()
+        ).map { target in
+            min(max(textView.selectedRange().location - target.cellRange.location, 0), target.cellRange.length)
+        }
         onTableSelectionChange?(MarkdownTableSelection(
             range: sourceSelection.range,
             table: sourceSelection.table,
             selectedRow: sourceSelection.selectedRow,
             selectedColumn: sourceSelection.selectedColumn,
+            selectedCellOffset: selectedCellOffset,
             rect: rect
         ))
     }

@@ -98,6 +98,8 @@ public struct MarkdownTableSelection: Sendable, Equatable {
     public let selectedRow: Int?
     /// Zero-based column index if the caret is inside a cell.
     public let selectedColumn: Int?
+    /// UTF-16 offset inside the selected cell content.
+    public let selectedCellOffset: Int?
     /// Best-effort table rect in the text view's coordinate space.
     public let rect: CGRect?
 
@@ -106,12 +108,14 @@ public struct MarkdownTableSelection: Sendable, Equatable {
         table: MarkdownTable,
         selectedRow: Int?,
         selectedColumn: Int?,
+        selectedCellOffset: Int? = nil,
         rect: CGRect?
     ) {
         self.range = range
         self.table = table
         self.selectedRow = selectedRow
         self.selectedColumn = selectedColumn
+        self.selectedCellOffset = selectedCellOffset
         self.rect = rect
     }
 }

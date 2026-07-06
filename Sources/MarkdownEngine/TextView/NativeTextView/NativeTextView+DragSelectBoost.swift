@@ -15,6 +15,9 @@ extension NativeTextView {
         if let toggled = toggleTaskCheckboxIfHit(event: event), toggled {
             return
         }
+        if selectRenderedTableCellIfHit(event: event) {
+            return
+        }
         if remapClickInParagraphSpacing(event: event) {
             return
         }
