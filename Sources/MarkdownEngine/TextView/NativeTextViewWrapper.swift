@@ -457,6 +457,18 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
             || abs(textView.textContainerInset.height - desiredTextInset.height) > 0.5 {
             textView.textContainerInset = desiredTextInset
         }
+        let listIndentChanged = abs(
+            context.coordinator.configuration.lists.indentPerLevel - configuration.lists.indentPerLevel
+        ) > 0.5
+        if listIndentChanged {
+            context.coordinator.configuration.lists.indentPerLevel = configuration.lists.indentPerLevel
+            textView.configuration.lists.indentPerLevel = configuration.lists.indentPerLevel
+            let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
+            if fullRange.length > 0 {
+                context.coordinator.restyleParagraphs([fullRange], in: textView)
+            }
+            textView.updateWideTableOverlays()
+        }
         // Refresh services/theme when the embedder hands us a new configuration
         // (e.g. when the available wiki-link targets change). Cheap pointer-/
         // value-based comparison; full equality isn't required because the
