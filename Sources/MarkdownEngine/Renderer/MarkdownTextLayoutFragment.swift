@@ -88,6 +88,9 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         // 4b. Bullet glyphs (on top of hidden -/*/+ markers)
         drawBulletMarkers(at: point, in: context)
 
+        // 4c. Link icons (in the room the hidden `[` makes before a link's text)
+        drawLinkIcons(at: point, in: context)
+
         // 5. Thematic breaks (full-width line, painted last so it doesn't
         //    fight with anything that already drew at the line's center)
         drawThematicBreaks(at: point, in: context)
@@ -535,7 +538,73 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         }
     }
 
+    // MARK: - Link Icons
+
+    /// Paint each link's icon in the room its hidden `[` makes (`.linkIcon`),
+    /// tinted with the link colour and centred on the line.
+    private func drawLinkIcons(at point: CGPoint, in context: CGContext) {
+        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return }
+        var any = false
+        ts.enumerateAttribute(.linkIcon, in: range, options: []) { value, _, stop in
+            if value is NSImage { any = true; stop.pointee = true }
+        }
+        guard any else { return }
+        let config = (textLayoutManager?.textContainer?.textView as? NativeTextView)?.configuration ?? .default
+
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+
+        ts.enumerateAttribute(.linkIcon, in: range, options: []) { [weak self] value, attrRange, _ in
+            guard let self, let image = value as? NSImage,
+                  let pos = drawPosition(forDocumentCharAt: attrRange.location, point: point) else { return }
+            // The text's own font (the character after the hidden `[`), for the icon's optical size.
+            let textIndex = min(NSMaxRange(attrRange), ts.length - 1)
+            let font = ts.attribute(.font, at: textIndex, effectiveRange: nil) as? NSFont ?? NSFont.systemFont(ofSize: 14)
+            let side = min(config.margins.linkIconAdvance - 4, ceil(font.capHeight * 1.35))
+            let size = image.size.width > 0 && image.size.height > 0
+                ? CGSize(width: side * image.size.width / max(image.size.width, image.size.height),
+                         height: side * image.size.height / max(image.size.width, image.size.height))
+                : CGSize(width: side, height: side)
+            // Centred on the text's x-height band.
+            let midY = pos.baselineY - font.xHeight / 2
+            let rect = CGRect(x: pos.x + 1, y: midY - size.height / 2, width: size.width, height: size.height)
+            let tinted = NSImage(size: size, flipped: false) { bounds in
+                image.draw(in: bounds)
+                config.theme.link.set()
+                bounds.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
+    }
+
     // MARK: - Task List Checkboxes
+
+    /// A rounded box: open, a hairline outline; ticked, filled with a tick.
+    static func drawBox(in rect: CGRect, checked: Bool, radius: CGFloat, lineWidth: CGFloat, theme: MarkdownEditorTheme) {
+        if checked {
+            theme.checkboxFill.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            // A 12-point tick centred in a 20-point box, scaled to the box (the context is flipped).
+            let u = rect.width / 20
+            let tick = NSBezierPath()
+            tick.move(to: CGPoint(x: rect.minX + 6.5 * u, y: rect.minY + 10.2 * u))
+            tick.line(to: CGPoint(x: rect.minX + 8.8 * u, y: rect.minY + 12.5 * u))
+            tick.line(to: CGPoint(x: rect.minX + 13.5 * u, y: rect.minY + 7.5 * u))
+            tick.lineWidth = 2 * u
+            tick.lineCapStyle = .round
+            tick.lineJoinStyle = .round
+            theme.checkboxCheck.setStroke()
+            tick.stroke()
+        } else {
+            let inset = rect.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
+            let path = NSBezierPath(roundedRect: inset, xRadius: max(0, radius - lineWidth / 2), yRadius: max(0, radius - lineWidth / 2))
+            path.lineWidth = lineWidth
+            theme.checkboxBorder.setStroke()
+            path.stroke()
+        }
+    }
 
     private func drawTaskCheckboxes(at point: CGPoint, in context: CGContext) {
         guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return }
@@ -555,6 +624,19 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
 
             let isChecked = (value as? Bool) ?? false
             guard let pos = drawPosition(forDocumentCharAt: attrRange.location, point: point) else { return }
+            let theme = (textLayoutManager?.textContainer?.textView as? NativeTextView)?.configuration.theme ?? .default
+            let shape = (textLayoutManager?.textContainer?.textView as? NativeTextView)?.configuration.checkbox.shape ?? .symbol
+            if case .box(let side, let radius, let lineWidth, _) = shape {
+                // Where the item's line starts (the syntax before it has collapsed), centred on the line.
+                guard let fragRange = fragmentNSRange,
+                      let line = lineBounds(forLocalIndex: attrRange.location - fragRange.location, point: point) else { return }
+                let scale = textLayoutManager?.textContainer?.textView?.window?.backingScaleFactor
+                    ?? NSScreen.main?.backingScaleFactor ?? 2.0
+                func pixel(_ v: CGFloat) -> CGFloat { (v * scale).rounded() / scale }
+                let rect = CGRect(x: pixel(pos.x), y: pixel(line.midY - side / 2), width: side, height: side)
+                Self.drawBox(in: rect, checked: isChecked, radius: radius, lineWidth: lineWidth, theme: theme)
+                return
+            }
 
             let font = (ts.attribute(.font, at: attrRange.location, effectiveRange: nil) as? NSFont)
                 ?? (textLayoutManager?.textContainer?.textView?.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize))

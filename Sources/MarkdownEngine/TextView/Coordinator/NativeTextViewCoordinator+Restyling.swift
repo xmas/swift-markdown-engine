@@ -107,6 +107,7 @@ extension NativeTextViewCoordinator {
 
         // Reconcile wide-table overlays after layout settles.
         if let nativeTextView = textView as? NativeTextView {
+            nativeTextView.refreshMargins()
             DispatchQueue.main.async { [weak nativeTextView] in
                 nativeTextView?.updateWideTableOverlays()
             }
@@ -143,6 +144,7 @@ extension NativeTextViewCoordinator {
         )
         // Reconcile wide-table overlays after layout settles.
         if let nativeTextView = textView as? NativeTextView {
+            nativeTextView.refreshMargins()
             DispatchQueue.main.async { [weak nativeTextView] in
                 nativeTextView?.updateWideTableOverlays()
             }

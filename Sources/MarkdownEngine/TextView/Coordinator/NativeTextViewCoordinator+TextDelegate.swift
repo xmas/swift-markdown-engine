@@ -210,6 +210,8 @@ extension NativeTextViewCoordinator {
 
     public func textViewDidChangeSelection(_ notification: Notification) {
         guard let tv = notification.object as? NSTextView else { return }
+        // After every other reaction below (restyles included), whichever way it returns.
+        defer { (tv as? NativeTextView)?.proxy?.onSelectionChange?(tv.selectedRange()) }
         // Raw mode: plain source — no reveal, snap-back, or inline previews.
         if configuration.rawSourceMode { return }
         if isWritingToolsActive { return }
@@ -335,13 +337,20 @@ extension NativeTextViewCoordinator {
         let currentBulletSyntax = MarkdownStyler.bulletSyntaxRange(at: selLoc, in: tv.string)
         let bulletSyntaxChanged = prevBulletSyntax?.location != currentBulletSyntax?.location
             || prevBulletSyntax?.length != currentBulletSyntax?.length
+        // Margin annotations fold their tokens only while the caret is off the
+        // line: moving to another paragraph reveals one line and folds the other.
+        let marginLineChanged: Bool = {
+            guard configuration.services.margins != nil, let prevLoc = previousCaretLocation else { return false }
+            let prevPara = nsText.paragraphRange(for: NSRange(location: min(prevLoc, nsText.length), length: 0))
+            return prevPara != paragraphRange
+        }()
         // Mid-drag restyle is suppressed (revealing markers shifts the layout → drag hit-test lands short, dropping trailing chars) and replayed on release.
         let isDragSelecting = currentEventType == .leftMouseDragged || currentEventType == .periodic
         if shouldSkipSelectionRestyle {
             needsRestyleAfterDrag = false // textDidChange restyles this edit cycle.
         } else if isDragSelecting {
             needsRestyleAfterDrag = true
-        } else if tokensChanged || taskSyntaxChanged || hrLineChanged || bulletSyntaxChanged || needsRestyleAfterDrag {
+        } else if tokensChanged || taskSyntaxChanged || hrLineChanged || bulletSyntaxChanged || marginLineChanged || needsRestyleAfterDrag {
             needsRestyleAfterDrag = false
             restyleTextView(tv, paragraphCandidates: paragraphCandidates, tokens: tokens)
         }
@@ -444,6 +453,27 @@ extension NativeTextViewCoordinator {
         if !shouldSkipSelectionRestyle {
             updateCodeBlockSelection(textView: tv, tokens: tokens)
         }
+    }
+
+    /// A caret never rests inside a range a margin annotation folds for good:
+    /// arrowing forward steps over it (and past the line break when it ends the
+    /// line), anything else lands before it.
+    public func textView(_ textView: NSTextView, willChangeSelectionFromCharacterRange oldRange: NSRange,
+                         toCharacterRange newRange: NSRange) -> NSRange {
+        guard newRange.length == 0, pendingEditedRange == nil, !isProgrammaticEdit,
+              let annotator = configuration.services.margins else { return newRange }
+        let ns = textView.string as NSString
+        guard let (line, ranges) = annotator.alwaysFolded(at: newRange.location, in: ns) else { return newRange }
+        for r in ranges where newRange.location > r.location && newRange.location <= NSMaxRange(r) {
+            // → from just before it; End, a click or ↑↓ land before it instead.
+            let stepRight = NSApp.currentEvent?.type == .keyDown && oldRange.length == 0
+                && oldRange.location == r.location && newRange.location == r.location + 1
+            guard stepRight else { return NSRange(location: r.location, length: 0) }
+            let past = NSMaxRange(r)
+            if past == NSMaxRange(line), past < ns.length { return NSRange(location: past + 1, length: 0) }
+            return NSRange(location: past, length: 0)
+        }
+        return newRange
     }
 
     public func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
@@ -554,6 +584,11 @@ extension NativeTextViewCoordinator {
             // (the mouseDown fallback mirrors that). Opening a link is navigation
             // too — flag it so mouseDown restores the pre-click caret.
             (textView as? NativeTextView)?.linkClickDidNavigate = true
+            // The embedder may open it itself (its own scheme, say).
+            if let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:)),
+               let handler = (textView as? NativeTextView)?.onWebLinkClick, handler(url) {
+                return true
+            }
             return false
         }
         // Direkt deaktivieren, bevor der Navigation-Callback läuft.

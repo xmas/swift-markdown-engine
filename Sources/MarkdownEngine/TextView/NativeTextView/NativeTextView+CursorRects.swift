@@ -12,11 +12,22 @@ import AppKit
 extension NativeTextView {
 
     override func mouseMoved(with event: NSEvent) {
+        updateMarginHover(for: event)
         if isInCursorExclusionZone(event) {
             NSCursor.arrow.set()
+        } else if marginHover != nil {
+            NSCursor.pointingHand.set()
         } else {
             super.mouseMoved(with: event)
             applyReadOnlyCursor(for: event)
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        if marginHover != nil {
+            marginHover = nil
+            refreshMargins()
         }
     }
 

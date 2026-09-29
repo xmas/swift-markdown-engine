@@ -128,6 +128,15 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
     /// Return `true` to show the arrow cursor instead of the I-beam.
     public var isCursorExcluded: ((CGPoint) -> Bool)?
 
+    /// Fires on a click in a margin beside a list item (see ``MarginAnnotator``),
+    /// with the cell to anchor a popover on.
+    public var onMarginClick: ((MarginClick) -> Void)?
+    /// Fires on a click on a rendered web link (a `[text](url)` or an autolink).
+    /// Return `true` when the embedder opened it; `false` lets AppKit open the URL.
+    public var onWebLinkClick: ((URL) -> Bool)?
+    /// A handle on the live editor for edits made from outside it (see ``MarkdownEditorProxy``).
+    public var proxy: MarkdownEditorProxy?
+
     public init(
         text: Binding<String>,
         isWikiLinkActive: Binding<Bool> = .constant(false),
@@ -150,7 +159,10 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         headerCollapsedHeight: CGFloat = 0,
         headerExpanded: Bool = true,
         retainedScrollDocumentIds: Set<String>? = nil,
-        isCursorExcluded: ((CGPoint) -> Bool)? = nil
+        isCursorExcluded: ((CGPoint) -> Bool)? = nil,
+        onMarginClick: ((MarginClick) -> Void)? = nil,
+        onWebLinkClick: ((URL) -> Bool)? = nil,
+        proxy: MarkdownEditorProxy? = nil
     ) {
         self._text = text
         self._isWikiLinkActive = isWikiLinkActive
@@ -174,6 +186,9 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         self.headerExpanded = headerExpanded
         self.retainedScrollDocumentIds = retainedScrollDocumentIds
         self.isCursorExcluded = isCursorExcluded
+        self.onMarginClick = onMarginClick
+        self.onWebLinkClick = onWebLinkClick
+        self.proxy = proxy
     }
 
     public func sizeThatFits(
@@ -244,6 +259,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         textView.minOverscrollPoints = configuration.overscroll.minPoints
         context.coordinator.configuration = configuration
         textView.insertionPointColor = configuration.theme.bodyText
+        textView.linkTextAttributes = Self.linkAttributes(configuration)
         textView.isEditable = isEditable
         textView.isSelectable = true
         textView.isRichText = true
@@ -264,6 +280,10 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         textView.baseFont = font
         textView.allowsUndo = true
         textView.isCursorExcluded = isCursorExcluded
+        textView.onMarginClick = onMarginClick
+        textView.onWebLinkClick = onWebLinkClick
+        textView.proxy = proxy
+        proxy?.textView = textView
         textView.isAutomaticSpellingCorrectionEnabled = configuration.spellChecking.automaticSpellingCorrection
         textView.isContinuousSpellCheckingEnabled = configuration.spellChecking.continuousSpellChecking
         textView.isGrammarCheckingEnabled = configuration.spellChecking.grammarChecking
@@ -423,6 +443,12 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
 
         textView.onPasteImage = onPasteImage
         textView.isCursorExcluded = isCursorExcluded
+        textView.onMarginClick = onMarginClick
+        textView.onWebLinkClick = onWebLinkClick
+        if textView.proxy !== proxy {
+            textView.proxy = proxy
+            proxy?.textView = textView
+        }
         textView.setPlaceholder(placeholder)
         // Sync heightBehavior across all three layers (scroll view, text view,
         // coordinator) so a runtime switch fully reconfigures.
@@ -479,11 +505,17 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         // embedder is the source of truth.
         let newImageFingerprint = configuration.services.images.fingerprint()
         let newWikiFingerprint = configuration.services.wikiLinks.fingerprint()
+        let newMarginFingerprint = configuration.services.margins?.fingerprint()
         let imageChanged = newImageFingerprint != context.coordinator.lastImageFingerprint
         let wikiChanged = newWikiFingerprint != context.coordinator.lastWikiFingerprint
-        if imageChanged || wikiChanged {
+        let marginsChanged = newMarginFingerprint != context.coordinator.lastMarginFingerprint
+        if imageChanged || wikiChanged || marginsChanged {
             context.coordinator.lastImageFingerprint = newImageFingerprint
             context.coordinator.lastWikiFingerprint = newWikiFingerprint
+            context.coordinator.lastMarginFingerprint = newMarginFingerprint
+            if marginsChanged {
+                textView.updateTrackingAreas()
+            }
             context.coordinator.configuration.services = configuration.services
             textView.configuration.services = configuration.services
             // Only an image change needs a layout re-measure; a wiki-link rename is style-only.
@@ -593,6 +625,13 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         context.coordinator.didInitialFormatting = true
     }
 
+    /// How a rendered link looks: AppKit draws `.link` runs with these, not the styler's own attributes.
+    static func linkAttributes(_ configuration: MarkdownEditorConfiguration) -> [NSAttributedString.Key: Any] {
+        var attrs: [NSAttributedString.Key: Any] = [.foregroundColor: configuration.theme.link, .cursor: NSCursor.pointingHand]
+        if configuration.link.underlined { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        return attrs
+    }
+
     public func makeCoordinator() -> Coordinator {
         let coordinator = NativeTextViewCoordinator(
             text: $text,
@@ -606,6 +645,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         coordinator.configuration = configuration
         coordinator.lastImageFingerprint = configuration.services.images.fingerprint()
         coordinator.lastWikiFingerprint = configuration.services.wikiLinks.fingerprint()
+        coordinator.lastMarginFingerprint = configuration.services.margins?.fingerprint()
         coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
         coordinator.onInlinePreviewKey = onInlinePreviewKey
         coordinator.userPrefersContinuousSpellChecking = configuration.spellChecking.continuousSpellChecking

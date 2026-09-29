@@ -29,7 +29,11 @@ extension NativeTextView {
         var hitIsChecked = false
         storage.enumerateAttribute(.taskCheckbox, in: fullRange, options: []) { value, attrRange, stop in
             guard let isChecked = value as? Bool else { return }
-            let rect = bridge.boundingRect(forCharacterRange: attrRange, in: textContainer)
+            var rect = bridge.boundingRect(forCharacterRange: attrRange, in: textContainer)
+            if case .box(let side, _, _, _) = configuration.checkbox.shape {
+                // The syntax has collapsed to the line's start; the box is drawn there, centred on the line.
+                rect = CGRect(x: rect.minX - 4, y: rect.midY - side / 2 - 4, width: side + 8, height: side + 8)
+            }
             if rect.contains(containerPoint) {
                 hitRange = attrRange
                 hitIsChecked = isChecked

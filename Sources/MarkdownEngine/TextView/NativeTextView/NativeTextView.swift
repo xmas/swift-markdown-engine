@@ -68,6 +68,20 @@ final class NativeTextView: NSTextView {
     /// Return `true` to show the arrow cursor instead of the edit-mode I-beam.
     var isCursorExcluded: ((CGPoint) -> Bool)?
 
+    // MARK: Margin annotations
+    /// Embedder callback for a click in a margin (see `MarginAnnotations.swift`).
+    var onMarginClick: ((MarginClick) -> Void)?
+    /// Embedder callback for a click on a rendered web link; return true when
+    /// handled, false to let AppKit open the URL.
+    var onWebLinkClick: ((URL) -> Bool)?
+    /// The margin cell under the pointer: its line's start and side.
+    var marginHover: (line: Int, side: MarginSide)?
+    /// Draws the margins above the text; created on first need.
+    var marginOverlay: MarginOverlayView?
+    var marginTrackingArea: NSTrackingArea?
+    /// The embedder's handle on this editor, told of selection changes.
+    weak var proxy: MarkdownEditorProxy?
+
     // MARK: Wide-table overlay state
     /// Live NSScrollView per wide table; keyed by source-ID hash.
     var wideTableOverlays: [Int: WideTableOverlay] = [:]

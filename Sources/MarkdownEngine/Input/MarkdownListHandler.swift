@@ -291,6 +291,23 @@ struct MarkdownLists {
                         newListItem = "\n" + leadingWhitespace + bulletChar + " "
                     }
                 }
+                // What a margin annotation folds for good (an embedder's id) stays with its
+                // line: when only folded text follows the caret, the break goes after it.
+                if affectedCharRange.length == 0, let annotator = activeConfig.services.margins,
+                   let (line, folded) = annotator.alwaysFolded(at: affectedCharRange.location, in: nsText) {
+                    let end = NSMaxRange(line)
+                    var i = affectedCharRange.location
+                    while i < end {
+                        if let r = folded.first(where: { NSLocationInRange(i, $0) }) { i = NSMaxRange(r); continue }
+                        guard nsText.character(at: i) == 0x20 || nsText.character(at: i) == 0x09 else { break }
+                        i += 1
+                    }
+                    if i >= end, affectedCharRange.location < end {
+                        MarkdownLists.performEdit(textView, replace: NSRange(location: end, length: 0), with: newListItem)
+                        textView.setSelectedRange(NSRange(location: end + (newListItem as NSString).length, length: 0))
+                        return false
+                    }
+                }
                 MarkdownLists.performEdit(textView, replace: affectedCharRange, with: newListItem)
                 return false
             }

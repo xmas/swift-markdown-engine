@@ -45,6 +45,8 @@ public struct MarkdownEditorConfiguration: Sendable {
     public var safeAreaInsets: SafeAreaInsets
     public var scrollers: ScrollersPolicy
     public var textInsets: TextInsets
+    /// Where margin annotations sit (only drawn when `services.margins` is set).
+    public var margins: MarginStyle
     /// Centered reading-column width; wide tables break out to full width. nil = full width (default).
     public var readingWidth: CGFloat?
     public var spellChecking: SpellCheckingPolicy
@@ -91,6 +93,7 @@ public struct MarkdownEditorConfiguration: Sendable {
         safeAreaInsets: SafeAreaInsets = .default,
         scrollers: ScrollersPolicy = .default,
         textInsets: TextInsets = .default,
+        margins: MarginStyle = .default,
         readingWidth: CGFloat? = nil,
         spellChecking: SpellCheckingPolicy = .default,
         heightBehavior: HeightBehavior = .scrolls,
@@ -115,6 +118,7 @@ public struct MarkdownEditorConfiguration: Sendable {
         self.safeAreaInsets = safeAreaInsets
         self.scrollers = scrollers
         self.textInsets = textInsets
+        self.margins = margins
         self.readingWidth = readingWidth
         self.spellChecking = spellChecking
         self.heightBehavior = heightBehavior
@@ -281,20 +285,28 @@ public struct ListStyle: Sendable {
     public var maximumNestingLevel: Int
     /// Extra line height added on top of the default to give list items room.
     public var extraLineHeight: CGFloat
+    /// Where a top-level item's marker starts. nil = one `indentPerLevel` in
+    /// from the text edge (the historical look); 0 puts it flush with headings.
+    public var leadingIndent: CGFloat?
 
     public init(
         helpersEnabled: Bool = true,
         autoClosePairsEnabled: Bool = true,
         indentPerLevel: CGFloat = 27.5,
         maximumNestingLevel: Int = 3,
-        extraLineHeight: CGFloat = 2
+        extraLineHeight: CGFloat = 2,
+        leadingIndent: CGFloat? = nil
     ) {
         self.helpersEnabled = helpersEnabled
         self.autoClosePairsEnabled = autoClosePairsEnabled
         self.indentPerLevel = indentPerLevel
         self.maximumNestingLevel = maximumNestingLevel
         self.extraLineHeight = extraLineHeight
+        self.leadingIndent = leadingIndent
     }
+
+    /// The first-line indent of a top-level item.
+    var firstIndent: CGFloat { leadingIndent ?? indentPerLevel }
 
     public static let `default` = ListStyle()
 }
@@ -308,13 +320,22 @@ public struct HeadingStyle: Sendable {
     public var fontMultipliers: [CGFloat]
     /// Top spacing in `em` units per heading level (1...6).
     public var topSpacingEm: [CGFloat]
+    /// Keep the `#` markers visible (in `theme.headingMarker`) while the caret
+    /// is elsewhere, instead of shrinking them away.
+    public var alwaysShowMarkers: Bool
+    /// The heading's weight; nil = bold (the historical look).
+    public var weight: NSFont.Weight?
 
     public init(
         fontMultipliers: [CGFloat] = [2.0, 1.5, 1.17, 1.0, 0.83, 0.67],
-        topSpacingEm: [CGFloat] = [0.35, 0.30, 0.25, 0.20, 0.15, 0.10]
+        topSpacingEm: [CGFloat] = [0.35, 0.30, 0.25, 0.20, 0.15, 0.10],
+        alwaysShowMarkers: Bool = false,
+        weight: NSFont.Weight? = nil
     ) {
         self.fontMultipliers = fontMultipliers
         self.topSpacingEm = topSpacingEm
+        self.alwaysShowMarkers = alwaysShowMarkers
+        self.weight = weight
     }
 
     public func fontMultiplier(for level: Int) -> CGFloat {
@@ -413,19 +434,32 @@ public struct CheckboxStyle: Sendable {
     public var sizeFromMarkerWidthFactor: CGFloat
     /// Inset applied inside the checkbox bounding box before drawing the icon.
     public var iconInsetFraction: CGFloat
+    /// How the box is drawn.
+    public var shape: Shape
+
+    /// `.symbol` draws SF Symbols over the `[ ]` characters (the historical
+    /// look). `.box` draws a rounded square of exactly `side` points where the
+    /// item's marker starts, with `gap` before the text: the `- [ ] ` syntax
+    /// takes exactly `side + gap`, so wrapped lines hang under the text.
+    public enum Shape: Sendable, Equatable {
+        case symbol
+        case box(side: CGFloat, cornerRadius: CGFloat, lineWidth: CGFloat, gap: CGFloat)
+    }
 
     public init(
         minimumExtraSpacing: CGFloat = 2.0,
         extraSpacingPerFontPointFraction: CGFloat = 0.18,
         sizeFromFontHeightFactor: CGFloat = 1.2,
         sizeFromMarkerWidthFactor: CGFloat = 1.2,
-        iconInsetFraction: CGFloat = 0.01
+        iconInsetFraction: CGFloat = 0.01,
+        shape: Shape = .symbol
     ) {
         self.minimumExtraSpacing = minimumExtraSpacing
         self.extraSpacingPerFontPointFraction = extraSpacingPerFontPointFraction
         self.sizeFromFontHeightFactor = sizeFromFontHeightFactor
         self.sizeFromMarkerWidthFactor = sizeFromMarkerWidthFactor
         self.iconInsetFraction = iconInsetFraction
+        self.shape = shape
     }
 
     public static let `default` = CheckboxStyle()
@@ -459,10 +493,13 @@ public struct LinkStyle: Sendable {
     /// Foreground alpha applied to "incomplete" link content (e.g. `[text]`
     /// without a target).
     public var incompleteLinkAlpha: CGFloat
+    /// Underline a rendered link's text.
+    public var underlined: Bool
 
-    public init(activeLinkAlpha: CGFloat = 0.55, incompleteLinkAlpha: CGFloat = 0.7) {
+    public init(activeLinkAlpha: CGFloat = 0.55, incompleteLinkAlpha: CGFloat = 0.7, underlined: Bool = true) {
         self.activeLinkAlpha = activeLinkAlpha
         self.incompleteLinkAlpha = incompleteLinkAlpha
+        self.underlined = underlined
     }
 
     public static let `default` = LinkStyle()

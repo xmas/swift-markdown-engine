@@ -62,7 +62,8 @@ enum MarkdownASTStyler {
             caret: caretLocation,
             config: configuration,
             wikiLinkID: wikiLinkIDProvider,
-            scopedRanges: scopedRanges
+            scopedRanges: scopedRanges,
+            annotations: AnnotationCache(configuration.services.margins)
         )
         let blocks = DocumentAST.parse(text, scopedRanges: scopedRanges)
         var attrs: [StyledRange] = []
@@ -70,6 +71,8 @@ enum MarkdownASTStyler {
             styleBlock(block, font: baseFont, ctx: ctx, into: &attrs)
         }
         shrinkInactiveMarkers(in: blocks, ctx: ctx, into: &attrs)
+        // Last, so a folded token's hiding outranks the styling of whatever it sits in.
+        applyMarginAnnotations(in: blocks, ctx: ctx, into: &attrs)
 
         // Text/regex passes (AST-agnostic); AST code ranges drive the "skip inside code" checks.
         let codeRanges = collectCodeRanges(in: blocks)
@@ -190,12 +193,18 @@ enum MarkdownASTStyler {
         let ws = ctx.ns.substring(with: wsRange)
         let markerGroup = NSRange(location: item.marker.location,
                                   length: item.contentRange.location - item.marker.location)
-        let markerWidth = (ctx.ns.substring(with: markerGroup) as NSString)
+        var markerWidth = (ctx.ns.substring(with: markerGroup) as NSString)
             .size(withAttributes: [.font: ctx.baseFont]).width
         let depthIndent = CGFloat(MarkdownLists.indentLevel(from: ws)) * ctx.config.lists.indentPerLevel
-        let extraSpacing = (item.checkbox != nil && !item.checked)
+        var extraSpacing = (item.checkbox != nil && !item.checked)
             ? HeadingHelpers.checkboxExtraSpacing(font: ctx.baseFont, configuration: ctx.config.checkbox)
             : 0
+        // A drawn box takes exactly its side and gap, whatever the syntax's own width.
+        let drawnBox = item.checkbox != nil ? boxGeometry(ctx) : nil
+        if let drawnBox {
+            markerWidth = drawnBox.side + drawnBox.gap
+            extraSpacing = 0
+        }
         let ps = NSMutableParagraphStyle()
         let lineHeight = ctx.baseLineHeight + ctx.config.lists.extraLineHeight
         ps.minimumLineHeight = lineHeight
@@ -205,9 +214,19 @@ enum MarkdownASTStyler {
         ps.paragraphSpacingBefore = 0
         ps.tabStops = []
         ps.defaultTabInterval = ctx.config.lists.indentPerLevel
-        ps.firstLineHeadIndent = ctx.config.lists.indentPerLevel
-        ps.headIndent = ctx.config.lists.indentPerLevel + depthIndent + markerWidth + extraSpacing
+        ps.firstLineHeadIndent = ctx.config.lists.firstIndent
+        ps.headIndent = ctx.config.lists.firstIndent + depthIndent + markerWidth + extraSpacing
         attrs.append((line, [.paragraphStyle: ps]))
+
+        // Exact indentation (opt-in with `leadingIndent`): a leading space is
+        // half a level wide, so two-space and tab indents land where wrapped
+        // lines hang. Tabs already step by `defaultTabInterval`.
+        if ctx.config.lists.leadingIndent != nil, wsRange.length > 0 {
+            let spaceWidth = (" " as NSString).size(withAttributes: [.font: ctx.baseFont]).width
+            for i in wsRange.location..<NSMaxRange(wsRange) where ctx.ns.character(at: i) == 0x20 {
+                attrs.append((NSRange(location: i, length: 1), [.kern: ctx.config.lists.indentPerLevel / 2 - spaceWidth]))
+            }
+        }
 
         // 2. Marker decoration (suppressed while the caret edits the syntax).
         if let box = item.checkbox {
@@ -217,11 +236,21 @@ enum MarkdownASTStyler {
             attrs.append((item.marker, [.foregroundColor: NSColor.clear]))
             if spacer.length > 0 { attrs.append((spacer, [.foregroundColor: NSColor.clear])) }
             attrs.append((box, [.taskCheckbox: item.checked, .foregroundColor: NSColor.clear]))
+            if let drawnBox {
+                // The whole `- [ ] ` collapses; its last character carries the box and gap.
+                let group = NSRange(location: item.marker.location, length: item.contentRange.location - item.marker.location)
+                let hidden = ctx.inlineMarkerFont
+                attrs.append((group, [.font: hidden, .kern: -hidden.pointSize, .foregroundColor: NSColor.clear]))
+                attrs.append((NSRange(location: NSMaxRange(group) - 1, length: 1), [.kern: drawnBox.side + drawnBox.gap]))
+            }
             if item.checked, NSMaxRange(item.range) > NSMaxRange(box) {
-                attrs.append((NSRange(location: NSMaxRange(box), length: NSMaxRange(item.range) - NSMaxRange(box)), [
+                var done: [NSAttributedString.Key: Any] = [
                     .strikethroughStyle: NSUnderlineStyle.single.rawValue,
                     .strikethroughColor: ctx.theme.strikethroughColor,
-                ]))
+                ]
+                if let color = ctx.theme.checkedTaskText { done[.foregroundColor] = color }
+                let text = NSRange(location: item.contentRange.location, length: max(0, NSMaxRange(line) - item.contentRange.location))
+                attrs.append((drawnBox == nil ? NSRange(location: NSMaxRange(box), length: NSMaxRange(item.range) - NSMaxRange(box)) : text, done))
             }
         } else if !item.ordered {
             let syntax = NSRange(location: item.marker.location,
@@ -229,6 +258,12 @@ enum MarkdownASTStyler {
             if NSLocationInRange(ctx.caret, syntax) { return }
             attrs.append((item.marker, [.bulletMarker: true, .foregroundColor: NSColor.clear]))
         }
+    }
+
+    /// The box's side and gap when checkboxes are drawn as boxes.
+    private static func boxGeometry(_ ctx: Ctx) -> (side: CGFloat, gap: CGFloat)? {
+        guard case .box(let side, _, _, let gap) = ctx.config.checkbox.shape else { return nil }
+        return (side, gap)
     }
 
     private static func styleAutoLinks(ctx: Ctx, codeRanges: [NSRange], linkRanges: [NSRange], into attrs: inout [StyledRange]) {
@@ -280,6 +315,7 @@ enum MarkdownASTStyler {
         let config: MarkdownEditorConfiguration
         let wikiLinkID: (NSRange) -> String?
         let scopedRanges: [NSRange]?
+        let annotations: AnnotationCache
 
         /// Active (syntax revealed) when the caret is inside the range or at its end (minus a newline).
         func isActive(_ range: NSRange) -> Bool {
@@ -300,6 +336,41 @@ enum MarkdownASTStyler {
         var scanRanges: [NSRange] { scopedRanges ?? [fullRange] }
     }
 
+    /// The embedder's margin annotations, asked once per item per styling pass.
+    final class AnnotationCache {
+        private let annotator: (any MarginAnnotator)?
+        private var byLine: [Int: MarginAnnotation?] = [:]
+        private var icons: [String: NSImage?] = [:]
+        init(_ annotator: (any MarginAnnotator)?) { self.annotator = annotator }
+
+        func annotation(for item: ListItem, in ns: NSString) -> MarginAnnotation? {
+            guard let annotator else { return nil }
+            if let hit = byLine[item.range.location] { return hit }
+            let found = annotator.annotation(forLine: MarkdownASTStyler.lineRange(of: item, in: ns), in: ns)
+            byLine[item.range.location] = found
+            return found
+        }
+
+        func icon(for url: String) -> NSImage? {
+            guard let annotator else { return nil }
+            if let hit = icons[url] { return hit }
+            let found = annotator.linkIcon(for: url)
+            icons[url] = found
+            return found
+        }
+    }
+
+    /// An item's line without its line break.
+    static func lineRange(of item: ListItem, in ns: NSString) -> NSRange {
+        var line = item.range
+        while line.length > 0 {
+            let last = ns.character(at: NSMaxRange(line) - 1)
+            guard last == 0x0A || last == 0x0D else { break }
+            line.length -= 1
+        }
+        return line
+    }
+
     // MARK: - Blocks
 
     private static func styleBlock(_ block: BlockNode, font: NSFont, ctx: Ctx, into attrs: inout [StyledRange]) {
@@ -311,7 +382,7 @@ enum MarkdownASTStyler {
             let multiplier = ctx.config.headings.fontMultiplier(for: level)
             let headingBase = NSFont(name: ctx.fontName, size: ctx.baseFont.pointSize * multiplier)
                 ?? .systemFont(ofSize: ctx.baseFont.pointSize * multiplier)
-            let headingFont = adding(.bold, to: headingBase)
+            let headingFont = ctx.config.headings.weight.map { weighted(headingBase, $0) } ?? adding(.bold, to: headingBase)
             let lineHeight = ceil(headingFont.ascender - headingFont.descender + headingFont.leading) + 1
             let headingPara = NSMutableParagraphStyle()
             headingPara.minimumLineHeight = lineHeight
@@ -332,7 +403,19 @@ enum MarkdownASTStyler {
         case .list(_, let items):
             for item in items {
                 styleListItem(item, ctx: ctx, into: &attrs)
-                styleInlines(item.inlines, font: font, ctx: ctx, into: &attrs)
+                var itemFont = font
+                if let note = ctx.annotations.annotation(for: item, in: ctx.ns) {
+                    let content = NSRange(location: item.contentRange.location,
+                                          length: max(0, NSMaxRange(lineRange(of: item, in: ctx.ns)) - item.contentRange.location))
+                    if let f = note.font {
+                        itemFont = f
+                        attrs.append((content, [.font: f]))
+                    }
+                    if let color = note.textColor, !(item.checked && ctx.theme.checkedTaskText != nil) {
+                        attrs.append((content, [.foregroundColor: color]))
+                    }
+                }
+                styleInlines(item.inlines, font: itemFont, ctx: ctx, into: &attrs)
             }
 
         case .codeBlock(let range):
@@ -521,11 +604,9 @@ enum MarkdownASTStyler {
                     .foregroundColor: ctx.theme.link.withAlphaComponent(ctx.config.link.activeLinkAlpha),
                 ]))
             } else {
-                attrs.append((textRange, [
-                    .link: url,
-                    .underlineStyle: NSUnderlineStyle.single.rawValue,
-                    .foregroundColor: ctx.theme.link,
-                ]))
+                var rendered: [NSAttributedString.Key: Any] = [.link: url, .foregroundColor: ctx.theme.link]
+                if ctx.config.link.underlined { rendered[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+                attrs.append((textRange, rendered))
             }
         }
         for marker in markers { attrs.append((marker, [.foregroundColor: ctx.theme.mutedText])) }
@@ -560,7 +641,7 @@ enum MarkdownASTStyler {
         for block in blocks where ctx.inScope(block.range) {
             switch block {
             case .heading(_, let range, let markers, let inlines):
-                if !ctx.isActive(range) { shrink(markers, ctx: ctx, into: &attrs) }
+                if !ctx.isActive(range), !ctx.config.headings.alwaysShowMarkers { shrink(markers, ctx: ctx, into: &attrs) }
                 shrinkInlineMarkers(inlines, ctx: ctx, into: &attrs)
             case .paragraph(_, let inlines), .blockquote(_, let inlines):
                 shrinkInlineMarkers(inlines, ctx: ctx, into: &attrs)
@@ -589,7 +670,7 @@ enum MarkdownASTStyler {
                 let active = forceReveal || ctx.isActive(range)
                 if !active { shrink(markers, ctx: ctx, into: &attrs) }
                 shrinkInlineMarkers(children, ctx: ctx, forceReveal: active, into: &attrs)
-            case .link(let range, _, _, let markers, let children):
+            case .link(let range, _, let url, let markers, let children):
                 let active = forceReveal || ctx.isActive(range)
                 if !active {
                     shrink(markers, ctx: ctx, into: &attrs)
@@ -597,6 +678,10 @@ enum MarkdownASTStyler {
                         let hide = NSRange(location: markers[2].location,
                                            length: NSMaxRange(markers[3]) - markers[2].location)
                         attrs.append((hide, [.font: ctx.inlineMarkerFont, .foregroundColor: NSColor.clear]))
+                    }
+                    // An icon before the text: the hidden `[` makes room for it.
+                    if let first = markers.first, let icon = ctx.annotations.icon(for: ctx.ns.substring(with: url)) {
+                        attrs.append((first, [.kern: ctx.config.margins.linkIconAdvance, .linkIcon: icon]))
                     }
                 }
                 shrinkInlineMarkers(children, ctx: ctx, forceReveal: active, into: &attrs)
@@ -618,7 +703,50 @@ enum MarkdownASTStyler {
         }
     }
 
+    // MARK: - Margin annotations
+
+    /// Tag each annotated item's line for the margin overlay, and fold its
+    /// tokens: the `folded` ones while the caret is off the line, the
+    /// `alwaysFolded` ones for good.
+    private static func applyMarginAnnotations(in blocks: [BlockNode], ctx: Ctx, into attrs: inout [StyledRange]) {
+        let hidden = ctx.inlineMarkerFont
+        let fold: [NSAttributedString.Key: Any] = [
+            .font: hidden, .kern: -hidden.pointSize, .foregroundColor: NSColor.clear,
+            .strikethroughStyle: 0, .underlineStyle: 0, .spellingState: 0,
+        ]
+        for block in blocks where ctx.inScope(block.range) {
+            guard case .list(_, let items) = block else { continue }
+            for item in items {
+                guard let note = ctx.annotations.annotation(for: item, in: ctx.ns) else { continue }
+                let line = lineRange(of: item, in: ctx.ns)
+                guard line.length > 0 else { continue }
+                attrs.append((line, [.marginAnnotation: MarginAnnotationBox(note)]))
+                let caretOnLine = ctx.caret >= line.location && ctx.caret <= NSMaxRange(line)
+                if caretOnLine {
+                    // Shown for editing, and quieter than the text around them.
+                    for r in note.folded where r.length > 0 && NSMaxRange(r) <= ctx.ns.length {
+                        attrs.append((r, [.foregroundColor: ctx.theme.mutedText]))
+                    }
+                }
+                for r in (caretOnLine ? [] : note.folded) + note.alwaysFolded
+                where r.length > 0 && NSMaxRange(r) <= ctx.ns.length {
+                    attrs.append((r, fold))
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
+
+    /// The same family at another weight (the named face alone can't change weight).
+    private static func weighted(_ font: NSFont, _ weight: NSFont.Weight) -> NSFont {
+        guard let family = font.familyName else { return font }
+        let descriptor = NSFontDescriptor(fontAttributes: [
+            .family: family,
+            .traits: [NSFontDescriptor.TraitKey.weight: weight.rawValue],
+        ])
+        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
+    }
 
     private static func traits(for kind: EmphasisKind) -> NSFontDescriptor.SymbolicTraits {
         switch kind {

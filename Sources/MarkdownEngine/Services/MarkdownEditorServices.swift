@@ -305,19 +305,24 @@ public struct MarkdownEditorServices: Sendable {
     public var syntaxHighlighter: any SyntaxHighlighter
     public var latex: any LatexRenderer
     public var bus: MarkdownEditorBus
+    /// Dates, people and the like set in the side margins beside list items
+    /// (see `MarginAnnotations.swift`). nil: no margins.
+    public var margins: (any MarginAnnotator)?
 
     public init(
         wikiLinks: any WikiLinkResolver = NoOpWikiLinkResolver(),
         images: any EmbeddedImageProvider = NoOpEmbeddedImageProvider(),
         syntaxHighlighter: any SyntaxHighlighter = PlainTextSyntaxHighlighter(),
         latex: any LatexRenderer = NoOpLatexRenderer(),
-        bus: MarkdownEditorBus = .default
+        bus: MarkdownEditorBus = .default,
+        margins: (any MarginAnnotator)? = nil
     ) {
         self.wikiLinks = wikiLinks
         self.images = images
         self.syntaxHighlighter = syntaxHighlighter
         self.latex = latex
         self.bus = bus
+        self.margins = margins
     }
 
     public static let `default` = MarkdownEditorServices()
