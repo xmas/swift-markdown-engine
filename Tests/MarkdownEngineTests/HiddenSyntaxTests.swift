@@ -121,6 +121,30 @@ struct HiddenSyntaxTests {
         #expect(caret(tv) == 0)
     }
 
+    @Test("⌥⌫ after a mark deletes its last word, never its markers")
+    func wordDeleteKeepsMarkers() {
+        // a0 ␠1 *2 *3 b4 o5 l6 d7 ␠8 w9 o10 r11 d12 *13 *14 c15
+        let (tv, _) = editor("a **bold word**c", caret: 15)
+        tv.deleteWordBackward(nil)
+        #expect(tv.string == "a **bold**c")
+        #expect(caret(tv) == 8)
+    }
+
+    @Test("⌥⌫ that empties a mark takes the mark")
+    func wordDeleteEmptiesMark() {
+        let (tv, _) = editor("a **word**c", caret: 10)
+        tv.deleteWordBackward(nil)
+        #expect(tv.string == "a c")
+        #expect(caret(tv) == 2)
+    }
+
+    @Test("⌥⌦ before a mark deletes its first word")
+    func wordDeleteForward() {
+        let (tv, _) = editor("a**word more** c", caret: 1)
+        tv.deleteWordForward(nil)
+        #expect(tv.string == "a**more** c")
+    }
+
     @Test("Plain text deletes as ever")
     func plainTextUntouched() {
         let (tv, _) = editor("hello", caret: 5)

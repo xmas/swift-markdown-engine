@@ -121,6 +121,69 @@ extension NativeTextView {
         return true
     }
 
+    /// ⌥⌫ ⌥⌦ beside hidden markers: the word is deleted inside the mark,
+    /// never the markers; a mark left empty goes whole. False when the
+    /// caret isn't beside a hidden run.
+    func deleteWordBesideHiddenSyntax(backward: Bool) -> Bool {
+        guard hidesSyntax, !hasMarkedText(), selectedRange().length == 0 else { return false }
+        let ns = string as NSString
+        let caret = selectedRange().location
+        // The markers the word sits against, and where the word's edge is.
+        let edge: Int
+        if backward {
+            guard caret > 0, isHiddenMarker(at: caret - 1) else { return false }
+            edge = hiddenRunStart(before: caret)
+            guard edge > 0, !isLineStart(edge, ns) else { return false }
+        } else {
+            guard caret < ns.length, isHiddenMarker(at: caret) else { return false }
+            edge = hiddenRunEnd(from: caret)
+            guard edge < ns.length else { return false }
+        }
+        // What was hidden before the edit, to tell an emptied mark after it.
+        let paragraph = ns.paragraphRange(for: NSRange(location: edge, length: 0))
+        let hiddenBefore = Set((paragraph.location..<NSMaxRange(paragraph)).filter(isHiddenMarker))
+        // `string` is live: the length before the edit, kept by value.
+        let lengthBefore = ns.length
+
+        undoManager?.beginUndoGrouping()
+        defer { undoManager?.endUndoGrouping() }
+        super.setSelectedRanges([NSValue(range: NSRange(location: edge, length: 0))], affinity: .downstream, stillSelecting: false)
+        if backward { super.deleteWordBackward(nil) } else { super.deleteWordForward(nil) }
+
+        // The deleted span, in the old text: [from, to).
+        let removed = lengthBefore - (string as NSString).length
+        let from = backward ? edge - removed : edge
+        let to = from + removed
+        guard removed > 0 else { return true }
+        // Markers on both sides of what went, nothing else between: an empty mark.
+        guard hiddenBefore.contains(from - 1), hiddenBefore.contains(to) else {
+            // A space left against a marker would unmake the mark (`**bold **`
+            // isn't bold, and its asterisks would show): it goes too.
+            let now = string as NSString
+            let space = backward ? from - 1 : from
+            let againstMarker = backward ? hiddenBefore.contains(to) : hiddenBefore.contains(from - 1)
+            if againstMarker, space >= 0, space < now.length, now.character(at: space) == 0x20 {
+                insertText("", replacementRange: NSRange(location: space, length: 1))
+                setSelectedRange(NSRange(location: backward ? space : from, length: 0))
+            } else {
+                setSelectedRange(NSRange(location: from, length: 0))
+            }
+            return true
+        }
+        var open = from - 1
+        while hiddenBefore.contains(open - 1) { open -= 1 }
+        var close = to
+        while hiddenBefore.contains(close + 1) { close += 1 }
+        let now = NSRange(location: open, length: (from - open) + (close + 1 - to))
+        if !isLineStart(open, ns) {
+            insertText("", replacementRange: now)
+            setSelectedRange(NSRange(location: open, length: 0))
+        } else {
+            setSelectedRange(NSRange(location: from, length: 0))
+        }
+        return true
+    }
+
     /// Deletes one visible character; when hidden markers then meet with
     /// nothing between them, the mark is empty and they go too.
     /// `caretAt` nil puts the caret where the character was (⌫); ⌦ keeps it.

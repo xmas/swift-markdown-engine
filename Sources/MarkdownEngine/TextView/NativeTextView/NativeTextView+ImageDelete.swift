@@ -22,7 +22,8 @@ extension NativeTextView {
     }
 
     override func deleteWordBackward(_ sender: Any?) {
-        if deleteImageLine(backward: true) || deleteBesideHiddenSyntax(backward: true) { return }
+        if deleteImageLine(backward: true) { return }
+        if deleteWordBesideHiddenSyntax(backward: true) { return }
         super.deleteWordBackward(sender)
     }
 
@@ -32,7 +33,8 @@ extension NativeTextView {
     }
 
     override func deleteWordForward(_ sender: Any?) {
-        if deleteImageLine(backward: false) || deleteBesideHiddenSyntax(backward: false) { return }
+        if deleteImageLine(backward: false) { return }
+        if deleteWordBesideHiddenSyntax(backward: false) { return }
         super.deleteWordForward(sender)
     }
 
