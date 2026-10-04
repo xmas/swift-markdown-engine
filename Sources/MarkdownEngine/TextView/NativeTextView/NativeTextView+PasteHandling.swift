@@ -67,7 +67,7 @@ extension NativeTextView {
         insertText(prepared, replacementRange: sel)
     }
 
-    private func insertBlockEmbed(_ embed: String) {
+    func insertBlockEmbed(_ embed: String) {
         let sel = selectedRange()
         let nsText = string as NSString
         var prefix = ""

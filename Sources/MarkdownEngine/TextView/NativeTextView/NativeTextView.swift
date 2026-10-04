@@ -46,6 +46,8 @@ final class NativeTextView: NSTextView {
 
     // MARK: Editor wiring
     var onPasteImage: ((NSPasteboard) -> String?)?
+    /// Drop hook; nil falls back to `onPasteImage` (see `NativeTextView+ImageDrop`).
+    var onDropImage: ((NSPasteboard) -> String?)?
     weak var layoutBridge: LayoutBridge?
     var baseFont: NSFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
 
