@@ -58,6 +58,11 @@ enum InlineASTAdapter {
                                         contentRange: between(markers), markerRanges: markers))
             children.forEach { append($0, to: &result) }
 
+        case .underline(let range, let markers, let children):
+            result.append(MarkdownToken(kind: .underline, range: range,
+                                        contentRange: between(markers), markerRanges: markers))
+            children.forEach { append($0, to: &result) }
+
         case .inlineLatex(let range, let content, let markers):
             result.append(MarkdownToken(kind: .inlineLatex, range: range, contentRange: content, markerRanges: markers))
 

@@ -72,6 +72,10 @@ extension NativeTextViewWrapper.Coordinator {
         return enclosingToken(of: .strikethrough, for: range, in: nsText as String) != nil
     }
 
+    func isSelectionUnderline(in nsText: NSString, range: NSRange) -> Bool {
+        return enclosingToken(of: .underline, for: range, in: nsText as String) != nil
+    }
+
     func isSelectionInlineCode(in nsText: NSString, range: NSRange) -> Bool {
         return enclosingToken(of: .inlineCode, for: range, in: nsText as String) != nil
     }
@@ -289,6 +293,30 @@ extension NativeTextViewWrapper.Coordinator {
         }
 
         wrapSelection(with: "~~")
+    }
+
+    /// `~text~`, Bear's underline: the selection or the word at the caret.
+    @objc func didMarkdownUnderline(_ sender: Any?) {
+        guard let tv = textView else { return }
+        let range = tv.selectedRange()
+
+        if let token = enclosingToken(of: .underline, for: range, in: tv.string) {
+            unwrapToken(token, leftReplacement: "", rightReplacement: "")
+            return
+        }
+
+        if range.length == 0, let wr = wordRange(at: range.location, in: tv.string as NSString), wr.length > 0 {
+            let cursorOffset = range.location - wr.location
+            wrapWordRange(wr, with: "~", cursorOffset: cursorOffset)
+            return
+        }
+
+        if range.length == 0 {
+            insertEmptyMarkers("~")
+            return
+        }
+
+        wrapSelection(with: "~")
     }
 
     @objc func didMarkdownInlineCode(_ sender: Any?) {

@@ -89,7 +89,8 @@ enum MarkdownASTStyler {
                 switch node {
                 case .code(let range, _): ranges.append(range)
                 case .emphasis(_, _, _, let children), .strikethrough(_, _, let children),
-                     .highlight(_, _, let children), .link(_, _, _, _, let children): walk(children)
+                     .highlight(_, _, let children), .underline(_, _, let children),
+                     .link(_, _, _, _, let children): walk(children)
                 default: break
                 }
             }
@@ -126,7 +127,7 @@ enum MarkdownASTStyler {
                 case .wikiLink(let range, _, _, _):
                     ranges.append(range)
                 case .emphasis(_, _, _, let children), .strikethrough(_, _, let children),
-                     .highlight(_, _, let children):
+                     .highlight(_, _, let children), .underline(_, _, let children):
                     walk(children)
                 default: break
                 }
@@ -485,6 +486,15 @@ enum MarkdownASTStyler {
                 }
                 styleInlines(children, font: font, ctx: ctx, into: &attrs)
 
+            case .underline(let range, let markers, let children):
+                attrs.append((content(of: markers), [
+                    .underlineStyle: NSUnderlineStyle.single.rawValue,
+                ]))
+                if ctx.isActive(range) {
+                    for marker in markers { attrs.append((marker, [.foregroundColor: ctx.theme.mutedText])) }
+                }
+                styleInlines(children, font: font, ctx: ctx, into: &attrs)
+
             case .code(let range, let contentRange):
                 attrs.append((contentRange, [.font: ctx.codeFont, .backgroundColor: ctx.codeBackground]))
                 // Suppress spell-check underlines on inline `code` spans (markers + content).
@@ -586,6 +596,10 @@ enum MarkdownASTStyler {
                 if !active { shrink(markers, ctx: ctx, into: &attrs) }
                 shrinkInlineMarkers(children, ctx: ctx, forceReveal: active, into: &attrs)
             case .highlight(let range, let markers, let children):
+                let active = forceReveal || ctx.isActive(range)
+                if !active { shrink(markers, ctx: ctx, into: &attrs) }
+                shrinkInlineMarkers(children, ctx: ctx, forceReveal: active, into: &attrs)
+            case .underline(let range, let markers, let children):
                 let active = forceReveal || ctx.isActive(range)
                 if !active { shrink(markers, ctx: ctx, into: &attrs) }
                 shrinkInlineMarkers(children, ctx: ctx, forceReveal: active, into: &attrs)

@@ -237,6 +237,13 @@ extension MarkdownStyler {
                     out.addAttribute(.backgroundColor, value: theme.highlightColor,
                                      range: NSRange(location: start, length: out.length - start))
                 }
+            case .underline(_, _, let children):
+                let start = out.length
+                recurse(children, font)
+                if out.length > start {
+                    out.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue,
+                                     range: NSRange(location: start, length: out.length - start))
+                }
             case .code(_, let content):
                 out.append(NSAttributedString(string: ns.substring(with: content), attributes: [
                     .font: codeFont, .backgroundColor: codeBackgroundColor, .foregroundColor: theme.bodyText
