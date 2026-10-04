@@ -25,6 +25,7 @@ extension NativeTextView {
         let ns = storage.string as NSString
         if ns.character(at: index) == 0x0A { return false }
         let attrs = storage.attributes(at: index, effectiveRange: nil)
+        if attrs[.revealableSource] != nil { return false }
         if let color = attrs[.foregroundColor] as? NSColor, color.alphaComponent < 0.01 { return true }
         if let font = attrs[.font] as? NSFont, font.pointSize < 1 { return true }
         return false

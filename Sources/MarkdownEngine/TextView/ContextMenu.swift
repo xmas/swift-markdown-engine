@@ -160,7 +160,7 @@ extension NativeTextViewWrapper.Coordinator {
         let prefix = String(repeating: "#", count: level) + " "
         // lineRange(for:) includes the trailing line terminator; preserve it so
         // applying a heading to a non-final line doesn't swallow the newline and
-        // merge the line with the next one (mirrors applyList's suffix handling).
+        // merge the line with the next one (as toggleList keeps a line's newline).
         let suffix = originalLine.hasSuffix("\n") ? "\n" : ""
         let newLine = prefix + content + suffix
         if tv.shouldChangeText(in: lineRange, replacementString: newLine) {
@@ -175,34 +175,12 @@ extension NativeTextViewWrapper.Coordinator {
         applyHeading(level: sender.tag)
     }
 
-    private func applyList(prefix: String) {
-        guard let tv = textView else { return }
-        let nsText = tv.string as NSString
-        let selRange = tv.selectedRange()
-        let startLine = nsText.lineRange(for: selRange)
-        let originalLine = nsText.substring(with: startLine)
-        let lineText = originalLine.trimmingCharacters(in: .newlines)
-        var content = lineText
-        if content.hasPrefix(prefix) {
-            content = String(content.dropFirst(prefix.count))
-        }
-        let newLine = prefix + content
-        let suffix = originalLine.hasSuffix("\n") ? "\n" : ""
-        let replacement = newLine + suffix
-        if tv.shouldChangeText(in: startLine, replacementString: replacement) {
-            tv.replaceCharacters(in: startLine, with: replacement)
-            tv.didChangeText()
-            let newSel = NSRange(location: startLine.location + prefix.count, length: content.count)
-            tv.setSelectedRange(newSel)
-        }
-    }
-
     @objc func didMarkdownUnorderedList(_ sender: Any?) {
-        applyList(prefix: "- ")
+        toggleList(.bullet)
     }
 
     @objc func didMarkdownOrderedList(_ sender: Any?) {
-        applyList(prefix: "1. ")
+        toggleList(.ordered)
     }
 
     @objc func didMarkdownBold(_ sender: Any?) {

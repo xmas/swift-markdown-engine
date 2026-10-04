@@ -169,7 +169,7 @@ extension NativeTextViewCoordinator {
             selectionRange: safeSelRange,
             tokens: tokens,
             in: fullText,
-            suppressed: !revealsSyntax(in: tv)
+            suppressed: !tv.isEditable, revealing: revealingKinds
         )
         filterImageEmbedActiveTokens(parsed: parsed, text: fullText, selectionLocation: safeSelRange.location)
         updateAutocorrectSettings(
@@ -235,7 +235,7 @@ extension NativeTextViewCoordinator {
         let nsText = tv.string as NSString
 
         let prevActive = activeTokenIndices
-        activeTokenIndices = MarkdownDetection.computeActiveTokenIndices(selectionRange: selRange, tokens: tokens, in: nsText, suppressed: !revealsSyntax(in: tv))
+        activeTokenIndices = MarkdownDetection.computeActiveTokenIndices(selectionRange: selRange, tokens: tokens, in: nsText, suppressed: !tv.isEditable, revealing: revealingKinds)
         filterImageEmbedActiveTokens(parsed: parsed, text: nsText, selectionLocation: selRange.location)
 
         // Snap-back: when the caret LEFT a wiki/image token, re-sync its displayed name to the live target name.
@@ -467,7 +467,7 @@ extension NativeTextViewCoordinator {
             selectionRange: textView.selectedRange(),
             tokens: parsed.tokens,
             in: textView.string as NSString,
-            suppressed: !revealsSyntax(in: textView)
+            suppressed: !textView.isEditable, revealing: revealingKinds
         )
 
         // Block LaTeX auto-wrap: insert newlines to keep $$ on its own line

@@ -91,6 +91,11 @@ enum MarkdownStyler {
         result += styleImageEmbeds(ctx)
         result += styleImageLinks(ctx)
         result += styleTables(ctx)
+        // Drawn tables and LaTeX: the caret may still walk in and open them.
+        for (idx, token) in tokens.enumerated()
+        where MarkdownDetection.editableBlockKinds.contains(token.kind) && !activeTokenIndices.contains(idx) {
+            result.append((token.range, [.revealableSource: true]))
+        }
         return result
     }
 }

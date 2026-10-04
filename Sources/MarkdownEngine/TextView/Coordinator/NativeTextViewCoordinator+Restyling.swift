@@ -66,7 +66,7 @@ extension NativeTextViewCoordinator {
                 selectionRange: textView.selectedRange(),
                 tokens: tokens,
                 in: nsDisplay,
-                suppressed: !revealsSyntax(in: textView)
+                suppressed: !textView.isEditable, revealing: revealingKinds
             )
 
             let ranges = MarkdownStyler.styleAttributes(
@@ -255,7 +255,7 @@ extension NativeTextViewCoordinator {
             selectionRange: textView.selectedRange(),
             tokens: tokens,
             in: nsText,
-            suppressed: !revealsSyntax(in: textView)
+            suppressed: !textView.isEditable, revealing: revealingKinds
         )
         restyleTextView(textView, paragraphCandidates: paragraphs, tokens: tokens)
     }
@@ -322,5 +322,10 @@ extension NativeTextViewCoordinator {
     /// never when the embedder asked for syntax to stay hidden.
     func revealsSyntax(in textView: NSTextView) -> Bool {
         textView.isEditable && configuration.revealsSyntax
+    }
+
+    /// The token kinds the caret may open; nil is all of them.
+    var revealingKinds: Set<MarkdownTokenKind>? {
+        configuration.revealsSyntax ? nil : MarkdownDetection.editableBlockKinds
     }
 }

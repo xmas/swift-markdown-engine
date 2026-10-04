@@ -14,6 +14,9 @@ import AppKit
 
 extension NSAttributedString.Key {
     static let latexImage = NSAttributedString.Key("LatexRenderedImage")
+    /// Over a table's or LaTeX's drawn source: hidden, yet the caret may enter
+    /// it, which opens it for editing (see `NativeTextView+HiddenSyntax`).
+    static let revealableSource = NSAttributedString.Key("RevealableSource")
     static let latexBounds = NSAttributedString.Key("LatexImageBounds")
     static let latexIsBlock = NSAttributedString.Key("LatexIsBlock")
     static let latexBlockOffsetY = NSAttributedString.Key("LatexBlockOffsetY")

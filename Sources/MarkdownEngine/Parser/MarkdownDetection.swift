@@ -17,7 +17,32 @@ enum MarkdownDetection {
         selectionRange: NSRange,
         tokens: [MarkdownToken],
         in text: NSString,
-        suppressed: Bool = false
+        suppressed: Bool = false,
+        revealing kinds: Set<MarkdownTokenKind>? = nil
+    ) -> Set<Int> {
+        let indices = computeAllActiveTokenIndices(selectionRange: selectionRange, tokens: tokens, in: text, suppressed: suppressed)
+        guard let kinds else { return indices }
+        // Only these kinds open under the caret, with whatever sits inside
+        // an open table (its cells' marks).
+        let openTables = indices.map { tokens[$0] }.filter { $0.kind == .table && kinds.contains(.table) }
+        return indices.filter { i in
+            let token = tokens[i]
+            if kinds.contains(token.kind) { return true }
+            return openTables.contains {
+                token.range.location >= $0.range.location && NSMaxRange(token.range) <= NSMaxRange($0.range)
+            }
+        }
+    }
+
+    /// What can't be edited drawn: with syntax hidden, tables and LaTeX still
+    /// open under the caret (`MarkdownEditorConfiguration.revealsSyntax`).
+    static let editableBlockKinds: Set<MarkdownTokenKind> = [.table, .blockLatex, .inlineLatex]
+
+    private static func computeAllActiveTokenIndices(
+        selectionRange: NSRange,
+        tokens: [MarkdownToken],
+        in text: NSString,
+        suppressed: Bool
     ) -> Set<Int> {
         // Read-only mode (no caret) hides all tokens regardless of any trailing selection.
         if suppressed { return [] }
