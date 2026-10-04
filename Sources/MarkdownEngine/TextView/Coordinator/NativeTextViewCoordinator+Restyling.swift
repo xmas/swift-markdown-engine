@@ -61,12 +61,12 @@ extension NativeTextViewCoordinator {
         } else {
             let tokens = parsedDocument(for: displayText).tokens
             // Hide caret from styling when read-only, else clicks reveal raw token syntax.
-            let caretLocation = textView.isEditable ? textView.selectedRange().location : -1
+            let caretLocation = revealsSyntax(in: textView) ? textView.selectedRange().location : -1
             activeTokenIndices = MarkdownDetection.computeActiveTokenIndices(
                 selectionRange: textView.selectedRange(),
                 tokens: tokens,
                 in: nsDisplay,
-                suppressed: !textView.isEditable
+                suppressed: !revealsSyntax(in: textView)
             )
 
             let ranges = MarkdownStyler.styleAttributes(
@@ -133,7 +133,7 @@ extension NativeTextViewCoordinator {
             paragraphCandidates: paragraphCandidates,
             baseFont: baseFont,
             paragraphStyle: paragraphStyle,
-            caretLocation: textView.isEditable ? textView.selectedRange().location : -1,
+            caretLocation: revealsSyntax(in: textView) ? textView.selectedRange().location : -1,
             activeTokenIndices: activeTokenIndices,
             wikiLinkIDProvider: { [weak self] range in
                 self?.wikiLinkID(for: range)
@@ -255,7 +255,7 @@ extension NativeTextViewCoordinator {
             selectionRange: textView.selectedRange(),
             tokens: tokens,
             in: nsText,
-            suppressed: !textView.isEditable
+            suppressed: !revealsSyntax(in: textView)
         )
         restyleTextView(textView, paragraphCandidates: paragraphs, tokens: tokens)
     }
@@ -314,5 +314,13 @@ extension NativeTextViewCoordinator {
         }
         textView.window?.makeFirstResponder(textView)
         textView.setSelectedRange(clampedCaret)
+    }
+}
+
+extension NativeTextViewCoordinator {
+    /// Whether the caret may reveal a token's syntax: never read-only, and
+    /// never when the embedder asked for syntax to stay hidden.
+    func revealsSyntax(in textView: NSTextView) -> Bool {
+        textView.isEditable && configuration.revealsSyntax
     }
 }

@@ -17,22 +17,22 @@ extension NativeTextView {
     )
 
     override func deleteBackward(_ sender: Any?) {
-        if deleteImageLine(backward: true) { return }
+        if deleteImageLine(backward: true) || deleteBesideHiddenSyntax(backward: true) { return }
         super.deleteBackward(sender)
     }
 
     override func deleteWordBackward(_ sender: Any?) {
-        if deleteImageLine(backward: true) { return }
+        if deleteImageLine(backward: true) || deleteBesideHiddenSyntax(backward: true) { return }
         super.deleteWordBackward(sender)
     }
 
     override func deleteForward(_ sender: Any?) {
-        if deleteImageLine(backward: false) { return }
+        if deleteImageLine(backward: false) || deleteBesideHiddenSyntax(backward: false) { return }
         super.deleteForward(sender)
     }
 
     override func deleteWordForward(_ sender: Any?) {
-        if deleteImageLine(backward: false) { return }
+        if deleteImageLine(backward: false) || deleteBesideHiddenSyntax(backward: false) { return }
         super.deleteWordForward(sender)
     }
 

@@ -458,6 +458,13 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
             (nsView as? ClampedScrollView)?.clampToInsets()
             nsView.invalidateIntrinsicContentSize()
         }
+        // Sync revealsSyntax; a flip restyles so marks show or hide at once.
+        if context.coordinator.configuration.revealsSyntax != configuration.revealsSyntax {
+            context.coordinator.configuration.revealsSyntax = configuration.revealsSyntax
+            textView.configuration.revealsSyntax = configuration.revealsSyntax
+            let full = NSRange(location: 0, length: (textView.string as NSString).length)
+            if full.length > 0 { context.coordinator.restyleParagraphs([full], in: textView) }
+        }
         // Sync rawSourceMode; a flip rebuilds in the new presentation. It
         // changes display text ([[Name]] ↔ [[Name|UUID]]), so drop the doc's
         // undo stack — surviving actions would replay at stale ranges.

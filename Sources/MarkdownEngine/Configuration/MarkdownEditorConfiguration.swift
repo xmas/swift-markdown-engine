@@ -70,6 +70,11 @@ public struct MarkdownEditorConfiguration: Sendable {
     /// Runtime-switchable; a flip rebuilds immediately and drops the document's
     /// undo stack (actions from the other mode would replay at stale ranges).
     public var rawSourceMode: Bool
+    /// When false the caret never reveals syntax: marks, links, headings and
+    /// images stay rendered while they are edited, the caret steps over the
+    /// hidden markers, and deleting beside one deletes the visible text. The
+    /// markdown still triggers styling as it is typed (`**bold**`), then hides.
+    public var revealsSyntax: Bool = true
 
     public init(
         theme: MarkdownEditorTheme = .default,
