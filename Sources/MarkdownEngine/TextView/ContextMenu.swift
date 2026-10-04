@@ -28,6 +28,7 @@ extension NativeTextViewWrapper.Coordinator {
         }) {
             menu.removeItem(at: fontIndex)
         }
+        addLinkItems(to: menu, at: charIndex, in: textView)
         guard let build = onBuildContextMenu else { return menu }
         return build(menu, textView.selectedRange())
     }
