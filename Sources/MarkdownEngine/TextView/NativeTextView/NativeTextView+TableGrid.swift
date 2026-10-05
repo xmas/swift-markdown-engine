@@ -167,8 +167,22 @@ extension NativeTextView {
 
     override func didChangeText() {
         super.didChangeText()
-        // A change the grid didn't make (an undo, a paste elsewhere): its cells are stale.
-        if tableGridEditor != nil, !isWritingTableSource { closeTableGrid(placing: nil) }
+        // A change the grid didn't make (an undo, an action on the text): its cells
+        // and the table's range are stale, so it goes without writing anything (the
+        // cell being typed in was written when focus left it), and the whole text
+        // restyles, wherever the table now is.
+        if tableGridEditor != nil, !isWritingTableSource { abandonTableGrid() }
+    }
+
+    private func abandonTableGrid() {
+        guard let editor = tableGridEditor else { return }
+        tableGridEditor = nil
+        editor.removeFromSuperview()
+        editingTableLocation = nil
+        let length = (string as NSString).length
+        guard length > 0, let coordinator = delegate as? NativeTextViewCoordinator else { return }
+        coordinator.restyleParagraphs([NSRange(location: 0, length: length)], in: self)
+        needsDisplay = true
     }
 }
 

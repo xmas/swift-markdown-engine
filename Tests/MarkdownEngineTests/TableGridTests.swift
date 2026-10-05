@@ -103,6 +103,41 @@ struct TableGridTests {
         #expect(tv.string.hasPrefix("Before\n\n| a | b |\n| --- | --- |\n| 1 | two |"))
     }
 
+    @Test("Moving cell to cell keeps every cell's words")
+    func everyCellIsKept() {
+        let text = "| a | b |\n|---|---|\n| 1 | 2 |"
+        let (tv, _) = editor(text)
+        tv.openTableGrid(NSRange(location: 0, length: (text as NSString).length), cell: (0, 0))
+        let grid = try! #require(tv.tableGridEditor)
+        func field(_ r: Int, _ c: Int) -> GridCellField {
+            grid.subviews.compactMap { $0 as? GridCellField }.first { $0.row == r && $0.column == c }!
+        }
+        field(0, 0).stringValue = "Item"
+        grid.focus(row: 0, column: 1)
+        field(0, 1).stringValue = "Qty"
+        grid.focus(row: 1, column: 0)
+        field(1, 0).stringValue = "Milk"
+        grid.focus(row: 1, column: 1)
+        field(1, 1).stringValue = "2"
+        tv.closeTableGrid(placing: .after)
+        #expect(tv.string == "| Item | Qty |\n| --- | --- |\n| Milk | 2 |")
+    }
+
+    @Test("A change the grid didn't make closes it without writing at a stale range")
+    func anOutsideChangeClosesTheGrid() {
+        let text = "**x**\n\n| a | b |\n|---|---|\n| 1 | 2 |"
+        let (tv, c) = editor(text)
+        let source = (text as NSString).range(of: "| a | b |\n|---|---|\n| 1 | 2 |")
+        tv.openTableGrid(source, cell: (1, 1))
+        #expect(tv.tableGridEditor != nil)
+        // Bold off the first word: the table moves up four characters.
+        tv.setSelectedRange(NSRange(location: 2, length: 1))
+        c.didMarkdownBold(nil)
+        #expect(tv.tableGridEditor == nil)
+        #expect(tv.editingTableLocation == nil)
+        #expect(tv.string == "x\n\n| a | b |\n|---|---|\n| 1 | 2 |")
+    }
+
     @Test func deletingTheTableTakesItsLine() {
         let text = "x\n| a |\n|---|\n| 1 |\ny"
         let (tv, _) = editor(text)

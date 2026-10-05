@@ -147,6 +147,8 @@ final class TableGridEditor: NSView, NSTextFieldDelegate {
 
     func focus(row: Int, column: Int, caretAtEnd: Bool = true) {
         guard fields.indices.contains(row), fields[row].indices.contains(column) else { return }
+        // The cell being left is written first, while it is still the one focused.
+        commitFocused()
         focused = (row, column)
         let field = fields[row][column]
         window?.makeFirstResponder(field)
@@ -158,13 +160,17 @@ final class TableGridEditor: NSView, NSTextFieldDelegate {
     }
 
     /// Writes the focused cell's words back when they changed.
-    func commitFocused() {
+    func commitFocused() { commit(row: focused.row, column: focused.column) }
+
+    /// Writes one cell's words back when they changed — by the field's own
+    /// place, never by which cell is focused now.
+    func commit(row: Int, column: Int) {
         guard !isRebuilding,
-              fields.indices.contains(focused.row), fields[focused.row].indices.contains(focused.column),
-              model.rows.indices.contains(focused.row), model.rows[focused.row].indices.contains(focused.column) else { return }
-        let text = TableModel.clean(fields[focused.row][focused.column].stringValue)
-        guard text != model.rows[focused.row][focused.column] else { return }
-        model.set(text, row: focused.row, column: focused.column)
+              fields.indices.contains(row), fields[row].indices.contains(column),
+              model.rows.indices.contains(row), model.rows[row].indices.contains(column) else { return }
+        let text = TableModel.clean(fields[row][column].stringValue)
+        guard text != model.rows[row][column] else { return }
+        model.set(text, row: row, column: column)
         write()
     }
 
@@ -244,7 +250,7 @@ final class TableGridEditor: NSView, NSTextFieldDelegate {
 
     func controlTextDidEndEditing(_ obj: Notification) {
         guard !isRebuilding else { return }
-        commitFocused()
+        if let field = obj.object as? GridCellField { commit(row: field.row, column: field.column) }
         // Focus left the grid altogether (a click in the text, another window): close.
         DispatchQueue.main.async { [weak self] in
             guard let self, let owner = self.owner, owner.tableGridEditor === self else { return }
