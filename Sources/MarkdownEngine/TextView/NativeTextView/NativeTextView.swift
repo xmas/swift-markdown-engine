@@ -70,6 +70,10 @@ final class NativeTextView: NSTextView {
     /// Return `true` to show the arrow cursor instead of the edit-mode I-beam.
     var isCursorExcluded: ((CGPoint) -> Bool)?
 
+    // MARK: Image resize state
+    /// The handle on the right edge of the picture under the pointer.
+    weak var imageResizeHandle: ImageResizeHandle?
+
     // MARK: Wide-table overlay state
     /// Live NSScrollView per wide table; keyed by source-ID hash.
     var wideTableOverlays: [Int: WideTableOverlay] = [:]

@@ -57,7 +57,9 @@ extension MarkdownStyler {
 
             let minWidth = imageEmbedConfig.minimumWidth
             let imageSize = image.size
-            let targetWidth = min(max(imageSize.width, minWidth), maxWidth)
+            // `![alt|480](url)`: a width in points rides at the end of the alt (Obsidian's way).
+            let requested = ImageLinkWidth.parse(alt: ctx.nsText.substring(with: token.contentRange)).width
+            let targetWidth = min(max(requested ?? imageSize.width, minWidth), maxWidth)
             let scale = imageSize.width > 0 ? targetWidth / imageSize.width : 1
             let displayWidth = imageSize.width * scale
             let displayHeight = imageSize.height * scale
@@ -103,7 +105,10 @@ extension MarkdownStyler {
                     ]))
                 }
             }
-            if !rendered {
+            if rendered {
+                let line = token.standaloneParagraphRange(in: ctx.nsText) ?? token.range
+                attrs.append((line, [.resizableImageWidth: imageSize.width]))
+            } else {
                 appendSecondaryMarkers(for: token, to: &attrs, theme: ctx.configuration.theme)
             }
         }
@@ -192,5 +197,26 @@ extension MarkdownStyler {
             }
         }
         return attrs
+    }
+}
+
+/// The width a `![alt|480](url)` line asks for: digits after the alt's last
+/// `|`, in points. Absent, the picture keeps its own size (always clamped to
+/// the column when drawn).
+enum ImageLinkWidth {
+    private static let regex = try! NSRegularExpression(pattern: #"\|\s*(\d+)\s*$"#)
+
+    static func parse(alt: String) -> (text: String, width: CGFloat?) {
+        let ns = alt as NSString
+        guard let m = regex.firstMatch(in: alt, range: NSRange(location: 0, length: ns.length)),
+              let value = Double(ns.substring(with: m.range(at: 1))), value > 0 else { return (alt, nil) }
+        return (ns.substring(to: m.range.location), CGFloat(value))
+    }
+
+    /// The alt with `width` written in, or taken out when nil.
+    static func alt(_ alt: String, width: Int?) -> String {
+        let text = parse(alt: alt).text
+        guard let width else { return text }
+        return text + "|" + String(width)
     }
 }

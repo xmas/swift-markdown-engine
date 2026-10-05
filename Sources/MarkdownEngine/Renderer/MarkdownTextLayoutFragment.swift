@@ -17,6 +17,9 @@ extension NSAttributedString.Key {
     /// Over a table's or LaTeX's drawn source: hidden, yet the caret may enter
     /// it, which opens it for editing (see `NativeTextView+HiddenSyntax`).
     static let revealableSource = NSAttributedString.Key("RevealableSource")
+    /// CGFloat — over a drawn `![alt](url)` line: the picture's own width in
+    /// points. Marks it resizable (`NativeTextView+ImageResize`).
+    static let resizableImageWidth = NSAttributedString.Key("ResizableImageWidth")
     static let latexBounds = NSAttributedString.Key("LatexImageBounds")
     static let latexIsBlock = NSAttributedString.Key("LatexIsBlock")
     static let latexBlockOffsetY = NSAttributedString.Key("LatexBlockOffsetY")
@@ -326,6 +329,24 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         }
         return CGRect(x: pos.x, y: yPosition,
                        width: imageBounds.width, height: imageBounds.height)
+    }
+
+    /// The drawn `![alt](url)` pictures in this fragment: the source location
+    /// of each, its rect relative to the fragment's origin, its own width.
+    func resizableImages() -> [(location: Int, rect: CGRect, naturalWidth: CGFloat)] {
+        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return [] }
+        var found: [(Int, CGRect, CGFloat)] = []
+        ts.enumerateAttribute(.latexImage, in: range, options: []) { value, attrRange, _ in
+            guard value is NSImage,
+                  let natural = ts.attribute(.resizableImageWidth, at: attrRange.location, effectiveRange: nil) as? CGFloat
+            else { return }
+            let imageBounds = (ts.attribute(.latexBounds, at: attrRange.location, effectiveRange: nil) as? NSValue)?.rectValue ?? .zero
+            let blockOffsetY = ts.attribute(.latexBlockOffsetY, at: attrRange.location, effectiveRange: nil) as? CGFloat
+            if let rect = blockImageDrawRect(attrRange: attrRange, imageBounds: imageBounds, blockOffsetY: blockOffsetY, point: .zero) {
+                found.append((attrRange.location, rect, natural))
+            }
+        }
+        return found
     }
 
     /// Returns the rects of all block images in this fragment, relative to

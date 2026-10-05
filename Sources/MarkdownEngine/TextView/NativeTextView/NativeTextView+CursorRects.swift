@@ -12,6 +12,7 @@ import AppKit
 extension NativeTextView {
 
     override func mouseMoved(with event: NSEvent) {
+        updateImageResizeHandle(for: event)
         if isInCursorExclusionZone(event) {
             NSCursor.arrow.set()
         } else {
@@ -22,6 +23,7 @@ extension NativeTextView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
+        updateImageResizeHandle(for: event)
         if isInCursorExclusionZone(event) {
             NSCursor.arrow.set()
         } else {
