@@ -36,7 +36,7 @@ struct ImageResizeTests {
     private static var bridges: [LayoutBridge] = []
     private static let layoutDelegate = MarkdownLayoutManagerDelegate()
 
-    private func editor(_ text: String) -> NativeTextView {
+    private func editor(_ text: String, hidden: Bool = false) -> NativeTextView {
         _ = NSApplication.shared
         let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         let tv = NativeTextView(frame: scroll.contentView.bounds)
@@ -44,6 +44,7 @@ struct ImageResizeTests {
         tv.allowsUndo = true
         var config = MarkdownEditorConfiguration.default
         config.services.images = FixedImages()
+        config.revealsSyntax = !hidden
         tv.configuration = config
         let c = NativeTextViewCoordinator(
             text: .constant(""), fontName: "SF Pro", fontSize: 16,
@@ -88,6 +89,29 @@ struct ImageResizeTests {
         let tv = editor("![board|240](a.png)")
         tv.writeImageWidth(nil, for: ResizableImage(location: 0, rect: .zero, naturalWidth: 400))
         #expect(tv.string == "![board](a.png)")
+    }
+
+    @Test("The caret never stands on a picture's line: it goes on past it, the way it was moving")
+    func caretSkipsAPictureLine() {
+        // a0 \n1 ![](a.png)2…11 \n12 b13
+        let tv = editor("a\n![](a.png)\nb", hidden: true)
+        tv.setSelectedRange(NSRange(location: 1, length: 0))
+        tv.setSelectedRange(NSRange(location: 12, length: 0))      // forward onto it
+        #expect(tv.selectedRange().location == 13)
+        tv.setSelectedRange(NSRange(location: 5, length: 0))       // back onto it
+        #expect(tv.selectedRange().location == 1)
+        tv.moveRight(nil)                                           // from the end of "a"
+        #expect(tv.selectedRange().location == 13)
+        tv.moveLeft(nil)
+        #expect(tv.selectedRange().location == 1)
+    }
+
+    @Test("The caret beside hidden markers is the body's height, not a dot")
+    func typingAttributesAreTheBodys() {
+        let tv = editor("a\n![](a.png)\n", hidden: true)
+        tv.setSelectedRange(NSRange(location: 1, length: 0))
+        tv.setSelectedRange(NSRange(location: 13, length: 0))
+        #expect(((tv.typingAttributes[.font] as? NSFont)?.pointSize ?? 0) >= 1)
     }
 
     @Test func snapsToItsOwnSizeTheColumnAndFractions() {

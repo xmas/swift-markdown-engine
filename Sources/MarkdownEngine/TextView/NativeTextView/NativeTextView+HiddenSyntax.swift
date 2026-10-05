@@ -61,6 +61,33 @@ extension NativeTextView {
         return index - start < end - index ? start : end
     }
 
+    /// The drawn picture line holding `index`: where it starts and where its
+    /// text ends (before its newline).
+    func pictureLine(containing index: Int) -> (start: Int, contentEnd: Int)? {
+        guard let storage = textStorage, storage.length > 0 else { return nil }
+        let ns = storage.string as NSString
+        let paragraph = ns.paragraphRange(for: NSRange(location: min(max(0, index), ns.length - 1), length: 0))
+        guard paragraph.length > 0,
+              storage.attribute(.resizableImageWidth, at: paragraph.location, effectiveRange: nil) != nil else { return nil }
+        var end = NSMaxRange(paragraph)
+        if end > paragraph.location, ns.character(at: end - 1) == 0x0A { end -= 1 }
+        // A caret at the start of the next line belongs there, not here.
+        guard index <= end else { return nil }
+        return (paragraph.location, end)
+    }
+
+    /// Typing beside hidden markers would take their 0.1 pt font and clear colour
+    /// (and the caret their height): the body's are used instead.
+    func repairTypingAttributes() {
+        guard let font = typingAttributes[.font] as? NSFont, font.pointSize < 1
+                || (typingAttributes[.foregroundColor] as? NSColor)?.alphaComponent ?? 1 < 0.01 else { return }
+        var attributes = typingAttributes
+        attributes[.font] = baseFont
+        attributes[.foregroundColor] = configuration.theme.bodyText
+        attributes.removeValue(forKey: .kern)
+        typingAttributes = attributes
+    }
+
     // MARK: Moving
 
     override func moveRight(_ sender: Any?) {
@@ -93,9 +120,24 @@ extension NativeTextView {
             return super.setSelectedRanges([NSValue(range: NSRange(location: table.location, length: 0))],
                                            affinity: affinity, stillSelecting: stillSelecting)
         }
+        // On a drawn picture's line the caret would stand in its hidden source, drawn
+        // at the 0.1 pt marker font's height — a dot. It goes on past the picture,
+        // the way it was moving: the line below, or the end of the line above.
+        if let picture = pictureLine(containing: location), !(location == 0 && picture.start == 0) {
+            let backward = location < selectedRange().location
+            let ns = string as NSString
+            let past = backward
+                ? max(0, picture.start - 1)
+                : (picture.contentEnd < ns.length ? picture.contentEnd + 1 : picture.contentEnd)
+            super.setSelectedRanges([NSValue(range: NSRange(location: past, length: 0))],
+                                    affinity: affinity, stillSelecting: stillSelecting)
+            repairTypingAttributes()
+            return
+        }
         let resting = restingCaret(near: location)
         super.setSelectedRanges([NSValue(range: NSRange(location: resting, length: 0))],
                                 affinity: affinity, stillSelecting: stillSelecting)
+        repairTypingAttributes()
     }
 
     // MARK: Deleting
