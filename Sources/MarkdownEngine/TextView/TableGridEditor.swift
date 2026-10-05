@@ -101,7 +101,11 @@ final class TableGridEditor: NSView, NSTextFieldDelegate {
         geometry = TableGeometry(cells: measured(), columnCount: model.columnCount, baseFont: baseFont)
         for (r, row) in fields.enumerated() {
             for (c, field) in row.enumerated() where r < geometry.rowCount && c < geometry.columnCount {
+                // A text field insets its words by its cell's padding: the frame
+                // reaches out by as much, so they sit where the drawn table puts
+                // them and the last letter isn't clipped.
                 field.frame = geometry.textRect(row: r, column: c)
+                    .insetBy(dx: -GridCellField.textInset, dy: 0)
             }
         }
         let size = geometry.size
@@ -297,6 +301,9 @@ final class TableGridEditor: NSView, NSTextFieldDelegate {
 
 /// One cell's field: borderless, transparent, single line.
 final class GridCellField: NSTextField {
+    /// How far an NSTextFieldCell insets its words from the field's edge.
+    static let textInset: CGFloat = 2
+
     let row: Int
     let column: Int
     weak var grid: TableGridEditor?
