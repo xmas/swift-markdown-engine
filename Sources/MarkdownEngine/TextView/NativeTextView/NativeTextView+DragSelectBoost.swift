@@ -20,6 +20,8 @@ extension NativeTextView {
             return ts.attribute(.link, at: idx, effectiveRange: nil) != nil
         }()
         if let toggled = toggleTaskCheckboxIfHit(event: event), toggled { return }
+        // A drawn table, with syntax hidden: its grid opens on the clicked cell.
+        if openTableGrid(at: convert(event.locationInWindow, from: nil)) { return }
         if remapClickInParagraphSpacing(event: event) { return }
         dragStartMouseScreenLoc = NSEvent.mouseLocation
         let boostTimer = Timer(timeInterval: 1.0 / configuration.dragSelection.ticksPerSecond, repeats: true) { [weak self] _ in

@@ -74,6 +74,16 @@ final class NativeTextView: NSTextView {
     /// The handle on the right edge of the picture under the pointer.
     weak var imageResizeHandle: ImageResizeHandle?
 
+    // MARK: Table grid state
+    /// The grid over the table being edited (syntax hidden).
+    weak var tableGridEditor: TableGridEditor?
+    /// That table's source location: the styler draws it blank under the grid.
+    var editingTableLocation: Int?
+    /// The grid's own write is under way (so it doesn't close itself).
+    var isWritingTableSource = false
+    /// A caret placed on purpose next to a table, not into it.
+    var suppressTableGridOpen = false
+
     // MARK: Wide-table overlay state
     /// Live NSScrollView per wide table; keyed by source-ID hash.
     var wideTableOverlays: [Int: WideTableOverlay] = [:]

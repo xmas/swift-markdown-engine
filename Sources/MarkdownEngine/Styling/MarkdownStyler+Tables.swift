@@ -62,7 +62,7 @@ extension MarkdownStyler {
             // See renderTable: resolve table colors under the text view's real appearance.
             let renderAppearance = ctx.layoutBridge?.firstTextContainer?.textView?.effectiveAppearance
                 ?? NSApp.effectiveAppearance
-            let image = renderTable(
+            var image = renderTable(
                 parsed,
                 baseFont: ctx.baseFont,
                 theme: ctx.configuration.theme,
@@ -70,6 +70,15 @@ extension MarkdownStyler {
                 latex: ctx.services.latex,
                 appearance: renderAppearance
             )
+            // The grid editor is over this table: it draws the grid and its fields, so
+            // the image underneath is left blank (same size) and nothing shows twice.
+            let editingAt = (ctx.layoutBridge?.firstTextContainer?.textView as? NativeTextView)?.editingTableLocation
+            if editingAt == token.range.location {
+                let size = image.size
+                image = NSImage(size: size, flipped: true) { _ in true }
+            }
+            // Where its source is, for the grid editor and a click on the drawn table.
+            attrs.append((token.range, [.tableSource: NSValue(range: token.range)]))
             let imageBounds = CGRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
             // Wide tables → scrollable mode (NSScrollView overlay); narrow → collapsed.
             let containerWidth = effectiveContainerWidth(for: ctx)
@@ -278,9 +287,8 @@ extension MarkdownStyler {
         appearance: NSAppearance
     ) -> NSImage {
         let columnCount = table.alignments.count
-        let cellHPadding: CGFloat = 12
-        let cellVPadding: CGFloat = 6
-        let borderWidth: CGFloat = 1
+        let cellHPadding = TableGeometry.cellHPadding
+        let borderWidth = TableGeometry.borderWidth
         // Resolve under the real appearance: `.withAlphaComponent()` freezes a dynamic color otherwise.
         func mutedColor(alpha: CGFloat) -> NSColor {
             var resolved: NSColor = theme.mutedText
@@ -290,8 +298,6 @@ extension MarkdownStyler {
             return resolved.withAlphaComponent(alpha)
         }
         let borderColor = mutedColor(alpha: 0.5)
-        let baseLineHeight: CGFloat = ceil(baseFont.ascender - baseFont.descender + baseFont.leading)
-        let minColumnContentWidth: CGFloat = 16
 
         // Pre-format every cell so width measurement and drawing share one NSAttributedString.
         let headerCells = table.header.map {
@@ -309,43 +315,13 @@ extension MarkdownStyler {
             }
         }
 
-        var columnWidths = [CGFloat](repeating: minColumnContentWidth, count: columnCount)
-        var maxCellHeight: CGFloat = baseLineHeight
-        func considerCell(_ cell: NSAttributedString, col: Int) {
-            let size = cell.size()
-            columnWidths[col] = max(columnWidths[col], ceil(size.width))
-            maxCellHeight = max(maxCellHeight, ceil(size.height))
-        }
-        for (i, cell) in headerCells.enumerated() where i < columnCount {
-            considerCell(cell, col: i)
-        }
-        for row in bodyCells {
-            for (i, cell) in row.enumerated() where i < columnCount {
-                considerCell(cell, col: i)
-            }
-        }
-
-        let lineHeight = max(baseLineHeight, maxCellHeight)
-        let rowCount = 1 + table.rows.count // header + body rows
-        let totalWidth = columnWidths.reduce(0, +)
-            + CGFloat(columnCount) * 2 * cellHPadding
-            + CGFloat(columnCount + 1) * borderWidth
-        let rowHeight = lineHeight + 2 * cellVPadding
-        let totalHeight = CGFloat(rowCount) * rowHeight + CGFloat(rowCount + 1) * borderWidth
-
-        let size = NSSize(width: totalWidth, height: totalHeight)
-
-        // Pre-compute layout offsets (top-down coords; drawing runs flipped).
-        var columnLeft = [CGFloat](repeating: 0, count: columnCount + 1)
-        columnLeft[0] = borderWidth
-        for i in 0..<columnCount {
-            columnLeft[i + 1] = columnLeft[i] + columnWidths[i] + 2 * cellHPadding + borderWidth
-        }
-        var rowTop = [CGFloat](repeating: 0, count: rowCount + 1)
-        rowTop[0] = borderWidth
-        for i in 0..<rowCount {
-            rowTop[i + 1] = rowTop[i] + rowHeight + borderWidth
-        }
+        let geometry = TableGeometry(cells: [headerCells] + bodyCells, columnCount: columnCount, baseFont: baseFont)
+        let lineHeight = geometry.lineHeight
+        let rowCount = geometry.rowCount
+        let rowHeight = geometry.rowHeight
+        let size = NSSize(width: geometry.size.width, height: geometry.size.height)
+        let columnLeft = geometry.columnLeft
+        let rowTop = geometry.rowTop
 
         let alignments = table.alignments
         let headerFill = mutedColor(alpha: 0.08)

@@ -99,16 +99,28 @@ struct BlockActionTests {
         #expect(tv.string == "| a |   | b |\n|---|---|---|\n| 1 |   | 2 |\n")
     }
 
-    @Test("Hidden syntax still opens a table under the caret, not a mark")
-    func tableOpensWhenHidden() {
+    @Test("Hidden syntax opens neither a table nor a mark as markdown")
+    func tableStaysDrawnWhenHidden() {
         let text = "**b** x\n\n| a | b |\n|---|---|\n| 1 | 2 |\n"
         let tokens = MarkdownTokenizer.parseTokensViaAST(in: text)
         let ns = text as NSString
         let inTable = MarkdownDetection.computeActiveTokenIndices(
             selectionRange: r(12, 0), tokens: tokens, in: ns, revealing: MarkdownDetection.editableBlockKinds)
-        #expect(inTable.contains { tokens[$0].kind == .table })
+        #expect(!inTable.contains { tokens[$0].kind == .table })
         let inBold = MarkdownDetection.computeActiveTokenIndices(
             selectionRange: r(2, 0), tokens: tokens, in: ns, revealing: MarkdownDetection.editableBlockKinds)
         #expect(inBold.isEmpty)
+    }
+
+    @Test func deletesTheCaretsRow() {
+        let table = "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n"
+        let tv = apply(table, r(22, 0)) { $0.didMarkdownTableDeleteRow(nil) }
+        #expect(tv.string == "| a | b |\n| --- | --- |\n| 3 | 4 |\n")
+    }
+
+    @Test func deletesTheCaretsColumn() {
+        let table = "| a | b |\n|---|---|\n| 1 | 2 |"
+        let tv = apply(table, r(6, 0)) { $0.didMarkdownTableDeleteColumn(nil) }
+        #expect(tv.string == "| a |\n| --- |\n| 1 |")
     }
 }

@@ -34,9 +34,10 @@ enum MarkdownDetection {
         }
     }
 
-    /// What can't be edited drawn: with syntax hidden, tables and LaTeX still
-    /// open under the caret (`MarkdownEditorConfiguration.revealsSyntax`).
-    static let editableBlockKinds: Set<MarkdownTokenKind> = [.table, .blockLatex, .inlineLatex]
+    /// What can't be edited drawn: with syntax hidden, LaTeX still opens under
+    /// the caret (`MarkdownEditorConfiguration.revealsSyntax`). Tables don't:
+    /// they edit as a grid (`TableGridEditor`).
+    static let editableBlockKinds: Set<MarkdownTokenKind> = [.blockLatex, .inlineLatex]
 
     private static func computeAllActiveTokenIndices(
         selectionRange: NSRange,

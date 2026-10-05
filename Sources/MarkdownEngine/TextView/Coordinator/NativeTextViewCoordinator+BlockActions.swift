@@ -158,8 +158,12 @@ extension NativeTextViewCoordinator {
 
     private static func line(_ cells: [String]) -> String { "|" + cells.joined(separator: "|") + "|" }
 
+    /// The open grid (syntax hidden), when the table is being edited as one.
+    private var tableGrid: TableGridEditor? { (textView as? NativeTextView)?.tableGridEditor }
+
     /// A blank row under the caret's row (under the rule when on the header).
     @objc func didMarkdownTableAddRow(_ sender: Any?) {
+        if let grid = tableGrid { return grid.insertRowBelow() }
         guard let tv = textView, let table = tableAtCaret() else { return NSSound.beep() }
         let ns = tv.string as NSString
         let after = table.lines[max(table.row, 1)]
@@ -176,6 +180,7 @@ extension NativeTextViewCoordinator {
 
     /// A blank column after the caret's column, in every row.
     @objc func didMarkdownTableAddColumn(_ sender: Any?) {
+        if let grid = tableGrid { return grid.insertColumnRight() }
         guard let tv = textView, let table = tableAtCaret() else { return NSSound.beep() }
         let ns = tv.string as NSString
         let whole = NSRange(location: table.lines[0].location,
@@ -203,5 +208,40 @@ extension NativeTextViewCoordinator {
         }
         let rowStart = whole.location + rows[..<table.row].reduce(0) { $0 + ($1 as NSString).length + 1 }
         tv.setSelectedRange(NSRange(location: min(rowStart + offset, (tv.string as NSString).length), length: 0))
+    }
+
+    /// The caret's row out (never the header).
+    @objc func didMarkdownTableDeleteRow(_ sender: Any?) {
+        if let grid = tableGrid { return grid.deleteRow() }
+        editTableAtCaret { model, cell in
+            guard cell.row > 0 else { return false }
+            model.deleteRow(cell.row)
+            return true
+        }
+    }
+
+    /// The caret's column out; the last one takes the table.
+    @objc func didMarkdownTableDeleteColumn(_ sender: Any?) {
+        if let grid = tableGrid { return grid.deleteColumn() }
+        editTableAtCaret { model, cell in model.deleteColumn(cell.column) }
+    }
+
+    /// The table at the caret as cells, changed by `body`, written back as one edit.
+    private func editTableAtCaret(_ body: (inout TableModel, (row: Int, column: Int)) -> Bool) {
+        guard let tv = textView, let table = tableAtCaret() else { return NSSound.beep() }
+        let ns = tv.string as NSString
+        let whole = NSRange(location: table.lines[0].location,
+                            length: NSMaxRange(table.lines[table.lines.count - 1]) - table.lines[0].location)
+        var text = ns.substring(with: whole)
+        let trailingNewline = text.hasSuffix("\n")
+        if trailingNewline { text.removeLast() }
+        guard var model = TableModel(source: text) else { return NSSound.beep() }
+        let cell = TableModel.cell(at: tv.selectedRange().location - whole.location, in: text)
+        guard body(&model, cell) else { return NSSound.beep() }
+        let replacement = model.markdown + (trailingNewline ? "\n" : "")
+        guard tv.shouldChangeText(in: whole, replacementString: replacement) else { return }
+        tv.replaceCharacters(in: whole, with: replacement)
+        tv.didChangeText()
+        tv.setSelectedRange(NSRange(location: whole.location, length: 0))
     }
 }

@@ -87,7 +87,13 @@ extension NativeTextView {
         guard hidesSyntax, !stillSelecting, ranges.count == 1, ranges[0].rangeValue.length == 0 else {
             return super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
         }
-        let resting = restingCaret(near: ranges[0].rangeValue.location)
+        // Into a table's source: its grid opens; the caret waits at the table.
+        let location = ranges[0].rangeValue.location
+        if openTableGridIfCaretEnters(location), let table = tableSource(at: location) {
+            return super.setSelectedRanges([NSValue(range: NSRange(location: table.location, length: 0))],
+                                           affinity: affinity, stillSelecting: stillSelecting)
+        }
+        let resting = restingCaret(near: location)
         super.setSelectedRanges([NSValue(range: NSRange(location: resting, length: 0))],
                                 affinity: affinity, stillSelecting: stillSelecting)
     }

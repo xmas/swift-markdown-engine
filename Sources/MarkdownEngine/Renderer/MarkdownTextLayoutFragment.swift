@@ -20,6 +20,8 @@ extension NSAttributedString.Key {
     /// CGFloat — over a drawn `![alt](url)` line: the picture's own width in
     /// points. Marks it resizable (`NativeTextView+ImageResize`).
     static let resizableImageWidth = NSAttributedString.Key("ResizableImageWidth")
+    /// NSValue(range:) — over a table's source: the whole table's range.
+    static let tableSource = NSAttributedString.Key("TableSource")
     static let latexBounds = NSAttributedString.Key("LatexImageBounds")
     static let latexIsBlock = NSAttributedString.Key("LatexIsBlock")
     static let latexBlockOffsetY = NSAttributedString.Key("LatexBlockOffsetY")
@@ -344,6 +346,25 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
             let blockOffsetY = ts.attribute(.latexBlockOffsetY, at: attrRange.location, effectiveRange: nil) as? CGFloat
             if let rect = blockImageDrawRect(attrRange: attrRange, imageBounds: imageBounds, blockOffsetY: blockOffsetY, point: .zero) {
                 found.append((attrRange.location, rect, natural))
+            }
+        }
+        return found
+    }
+
+    /// The drawn (not scrollable) tables in this fragment: each one's source
+    /// range and rect relative to the fragment's origin.
+    func drawnTables() -> [(source: NSRange, rect: CGRect)] {
+        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return [] }
+        var found: [(NSRange, CGRect)] = []
+        ts.enumerateAttribute(.latexImage, in: range, options: []) { value, attrRange, _ in
+            guard value is NSImage,
+                  let source = (ts.attribute(.tableSource, at: attrRange.location, effectiveRange: nil) as? NSValue)?.rangeValue,
+                  ts.attribute(.scrollableBlockNaturalWidth, at: attrRange.location, effectiveRange: nil) == nil
+            else { return }
+            let imageBounds = (ts.attribute(.latexBounds, at: attrRange.location, effectiveRange: nil) as? NSValue)?.rectValue ?? .zero
+            let blockOffsetY = ts.attribute(.latexBlockOffsetY, at: attrRange.location, effectiveRange: nil) as? CGFloat
+            if let rect = blockImageDrawRect(attrRange: attrRange, imageBounds: imageBounds, blockOffsetY: blockOffsetY, point: .zero) {
+                found.append((source, rect))
             }
         }
         return found
