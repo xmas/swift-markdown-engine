@@ -161,7 +161,9 @@ final class ImageResizeHandle: NSView {
 
     static func frame(for picture: CGRect) -> CGRect {
         let height = min(44, max(24, picture.height / 4))
-        return CGRect(x: picture.maxX - 7, y: picture.midY - height / 2, width: 14, height: height)
+        // Inside the picture's edge: a picture as wide as the column reaches the
+        // text view's own edge, and anything past it is clipped.
+        return CGRect(x: picture.maxX - 18, y: picture.midY - height / 2, width: 14, height: height)
     }
 
     override var isFlipped: Bool { true }
