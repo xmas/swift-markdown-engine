@@ -107,7 +107,9 @@ extension MarkdownStyler {
             }
             if rendered {
                 let line = token.standaloneParagraphRange(in: ctx.nsText) ?? token.range
-                attrs.append((line, [.resizableImageWidth: imageSize.width]))
+                // Never spell-checked: the path's red mark, squeezed into the hidden
+                // font, was a dot at the picture's corner.
+                attrs.append((line, [.resizableImageWidth: imageSize.width, .spellingState: 0]))
             } else {
                 appendSecondaryMarkers(for: token, to: &attrs, theme: ctx.configuration.theme)
             }

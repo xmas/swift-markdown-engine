@@ -52,6 +52,23 @@ extension NativeTextView {
         return hit
     }
 
+    /// Where the picture on the line starting at `start` is drawn, in view coordinates.
+    func drawnPictureRect(onLineStarting start: Int) -> CGRect? {
+        guard let tlm = textLayoutManager else { return nil }
+        let line = (string as NSString).paragraphRange(for: NSRange(location: start, length: 0))
+        var found: CGRect?
+        tlm.enumerateTextLayoutFragments(from: tlm.documentRange.location, options: [.ensuresLayout]) { fragment in
+            guard let markdown = fragment as? MarkdownTextLayoutFragment else { return true }
+            let frame = fragment.layoutFragmentFrame
+            for image in markdown.resizableImages() where NSLocationInRange(image.location, line) {
+                found = image.rect.offsetBy(dx: frame.minX + textContainerOrigin.x, dy: frame.minY + textContainerOrigin.y)
+                return false
+            }
+            return true
+        }
+        return found
+    }
+
     /// The widest a picture may be drawn: the text container's measure.
     var imageColumnWidth: CGFloat {
         guard let container = textContainer else { return bounds.width }

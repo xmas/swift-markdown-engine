@@ -93,9 +93,18 @@ extension NativeTextView {
     override func moveRight(_ sender: Any?) {
         guard hidesSyntax, selectedRange().length == 0 else { return super.moveRight(sender) }
         let ns = string as NSString
-        var to = hiddenRunEnd(from: selectedRange().location)
-        if to < ns.length { to = NSMaxRange(ns.rangeOfComposedCharacterSequence(at: to)) }
-        if isLineStart(to, ns), isHiddenMarker(at: to) { to = hiddenRunEnd(from: to) }
+        let from = selectedRange().location
+        var to: Int
+        if let picture = pictureLine(containing: from) {
+            // Before the picture → after it → the next line.
+            to = from == picture.start ? picture.contentEnd : min(picture.contentEnd + 1, ns.length)
+        } else {
+            to = hiddenRunEnd(from: from)
+            if to < ns.length { to = NSMaxRange(ns.rangeOfComposedCharacterSequence(at: to)) }
+            if isLineStart(to, ns), isHiddenMarker(at: to), pictureLine(containing: to)?.start != to {
+                to = hiddenRunEnd(from: to)
+            }
+        }
         setSelectedRange(NSRange(location: to, length: 0))
         scrollRangeToVisible(selectedRange())
     }
@@ -103,9 +112,18 @@ extension NativeTextView {
     override func moveLeft(_ sender: Any?) {
         guard hidesSyntax, selectedRange().length == 0 else { return super.moveLeft(sender) }
         let ns = string as NSString
-        var to = hiddenRunStart(before: selectedRange().location)
-        if to > 0 { to = ns.rangeOfComposedCharacterSequence(at: to - 1).location }
-        if isLineStart(to, ns), isHiddenMarker(at: to) { to = hiddenRunEnd(from: to) }
+        let from = selectedRange().location
+        var to: Int
+        if let picture = pictureLine(containing: from) {
+            // After the picture → before it → the line above.
+            to = from == picture.contentEnd && picture.contentEnd != picture.start ? picture.start : max(0, picture.start - 1)
+        } else {
+            to = hiddenRunStart(before: from)
+            if to > 0 { to = ns.rangeOfComposedCharacterSequence(at: to - 1).location }
+            if isLineStart(to, ns), isHiddenMarker(at: to), pictureLine(containing: to) == nil {
+                to = hiddenRunEnd(from: to)
+            }
+        }
         setSelectedRange(NSRange(location: to, length: 0))
         scrollRangeToVisible(selectedRange())
     }
@@ -120,17 +138,23 @@ extension NativeTextView {
             return super.setSelectedRanges([NSValue(range: NSRange(location: table.location, length: 0))],
                                            affinity: affinity, stillSelecting: stillSelecting)
         }
-        // On a drawn picture's line the caret would stand in its hidden source, drawn
-        // at the 0.1 pt marker font's height — a dot. It goes on past the picture,
-        // the way it was moving: the line below, or the end of the line above.
-        if let picture = pictureLine(containing: location), !(location == 0 && picture.start == 0) {
-            let backward = location < selectedRange().location
-            let ns = string as NSString
-            let past = backward
-                ? max(0, picture.start - 1)
-                : (picture.contentEnd < ns.length ? picture.contentEnd + 1 : picture.contentEnd)
-            super.setSelectedRanges([NSValue(range: NSRange(location: past, length: 0))],
+        // A drawn picture's line has two places for the caret, before the picture and
+        // after it (drawn as a tall bar beside it), never inside its hidden source.
+        if let picture = pictureLine(containing: location), location != picture.start, location != picture.contentEnd {
+            let current = selectedRange().location
+            let spot: Int
+            if NSApp.currentEvent.map({ [.leftMouseDown, .leftMouseUp, .leftMouseDragged].contains($0.type) }) == true {
+                spot = location - picture.start < picture.contentEnd - location ? picture.start : picture.contentEnd
+            } else {
+                spot = location < current ? picture.contentEnd : picture.start
+            }
+            super.setSelectedRanges([NSValue(range: NSRange(location: spot, length: 0))],
                                     affinity: affinity, stillSelecting: stillSelecting)
+            repairTypingAttributes()
+            return
+        }
+        if pictureLine(containing: location) != nil {
+            super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
             repairTypingAttributes()
             return
         }
@@ -138,6 +162,34 @@ extension NativeTextView {
         super.setSelectedRanges([NSValue(range: NSRange(location: resting, length: 0))],
                                 affinity: affinity, stillSelecting: stillSelecting)
         repairTypingAttributes()
+    }
+
+    // MARK: Typing beside a picture
+
+    /// Words typed before a picture start a line above it, after it a line below:
+    /// the picture's line never takes text (it would stop being drawn). Return
+    /// before it pushes it down a line.
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
+        let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
+        guard hidesSyntax, !hasMarkedText(), target.length == 0, !text.isEmpty,
+              let picture = pictureLine(containing: target.location) else {
+            return super.insertText(string, replacementRange: replacementRange)
+        }
+        let isReturn = text == "\n" || text == "\r"
+        // A pasted or dropped block brings its own line breaks.
+        if !isReturn, text.contains("\n") || text.contains("\r") {
+            return super.insertText(string, replacementRange: replacementRange)
+        }
+        if target.location == picture.start, picture.start != picture.contentEnd {
+            if isReturn { return super.insertText("\n", replacementRange: target) }
+            super.insertText(text + "\n", replacementRange: target)
+            setSelectedRange(NSRange(location: target.location + (text as NSString).length, length: 0))
+        } else if target.location == picture.contentEnd {
+            super.insertText(isReturn ? "\n" : "\n" + text, replacementRange: target)
+        } else {
+            super.insertText(string, replacementRange: replacementRange)
+        }
     }
 
     // MARK: Deleting

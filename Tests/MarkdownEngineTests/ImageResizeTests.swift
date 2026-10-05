@@ -91,19 +91,52 @@ struct ImageResizeTests {
         #expect(tv.string == "![board](a.png)")
     }
 
-    @Test("The caret never stands on a picture's line: it goes on past it, the way it was moving")
-    func caretSkipsAPictureLine() {
-        // a0 \n1 ![](a.png)2…11 \n12 b13
+    // a0 \n1 ![](a.png)2…11 \n12 b13 — before the picture is 2, after it 12.
+
+    @Test("A picture's line has two caret spots: before it and after it")
+    func beforeAndAfterAPicture() {
         let tv = editor("a\n![](a.png)\nb", hidden: true)
         tv.setSelectedRange(NSRange(location: 1, length: 0))
-        tv.setSelectedRange(NSRange(location: 12, length: 0))      // forward onto it
-        #expect(tv.selectedRange().location == 13)
-        tv.setSelectedRange(NSRange(location: 5, length: 0))       // back onto it
+        tv.moveRight(nil); #expect(tv.selectedRange().location == 2)    // before
+        tv.moveRight(nil); #expect(tv.selectedRange().location == 12)   // after
+        tv.moveRight(nil); #expect(tv.selectedRange().location == 13)   // the next line
+        tv.moveLeft(nil); #expect(tv.selectedRange().location == 12)
+        tv.moveLeft(nil); #expect(tv.selectedRange().location == 2)
+        tv.moveLeft(nil); #expect(tv.selectedRange().location == 1)
+        tv.setSelectedRange(NSRange(location: 6, length: 0))            // into its source, forward
+        #expect(tv.selectedRange().location == 2)
+    }
+
+    @Test("Return before a picture pushes it down; words typed beside it get their own line")
+    func typingBesideAPicture() {
+        let tv = editor("![](a.png)\nb", hidden: true)
+        tv.setSelectedRange(NSRange(location: 0, length: 0))
+        tv.insertText("\n", replacementRange: tv.selectedRange())
+        #expect(tv.string == "\n![](a.png)\nb")
         #expect(tv.selectedRange().location == 1)
-        tv.moveRight(nil)                                           // from the end of "a"
-        #expect(tv.selectedRange().location == 13)
-        tv.moveLeft(nil)
+        tv.insertText("x", replacementRange: tv.selectedRange())
+        #expect(tv.string == "\nx\n![](a.png)\nb")
+        #expect(tv.selectedRange().location == 2)
+        tv.setSelectedRange(NSRange(location: 3, length: 0))            // before the picture
+        tv.moveRight(nil)                                                // after it
+        tv.insertText("y", replacementRange: tv.selectedRange())
+        #expect(tv.string == "\nx\n![](a.png)\ny\nb")
+    }
+
+    @Test("⌫ before a picture takes the empty line above, else steps up; ⌫ after it takes the picture")
+    func deletingBesideAPicture() {
+        let tv = editor("a\n\n![](a.png)\nb", hidden: true)
+        tv.setSelectedRange(NSRange(location: 2, length: 0))
+        tv.moveRight(nil)                                                // before the picture (3)
+        #expect(tv.selectedRange().location == 3)
+        tv.deleteBackward(nil)
+        #expect(tv.string == "a\n![](a.png)\nb")
+        tv.deleteBackward(nil)                                           // text above: step up
+        #expect(tv.string == "a\n![](a.png)\nb")
         #expect(tv.selectedRange().location == 1)
+        tv.moveRight(nil); tv.moveRight(nil)                             // after the picture
+        tv.deleteBackward(nil)
+        #expect(tv.string == "a\nb")
     }
 
     @Test("The caret beside hidden markers is the body's height, not a dot")

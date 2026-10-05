@@ -47,12 +47,35 @@ extension NativeTextView {
         let ns = string as NSString
         let caret = selection.location
 
-        // The caret on the image line itself: either key takes the line.
+        // The caret on the image line itself — before it or after it.
         if let line = drawnImageLine(containing: caret, in: ns), caret == line.contentEnd || caret == line.range.location {
-            if backward || caret == line.range.location {
+            let before = caret == line.range.location && line.range.location != line.contentEnd
+            // ⌫ after it, ⌦ before it: the picture goes.
+            if backward != before {
                 removeImageLine(line, in: ns)
                 return true
             }
+            // ⌫ before it: an empty line above goes (the picture moves up), else the
+            // caret steps to the line above. ⌦ after it: the same, below.
+            if backward {
+                guard line.range.location > 0 else { return true }
+                let aboveStart = ns.paragraphRange(for: NSRange(location: line.range.location - 1, length: 0)).location
+                if aboveStart == line.range.location - 1 {
+                    insertText("", replacementRange: NSRange(location: aboveStart, length: 1))
+                    setSelectedRange(NSRange(location: aboveStart, length: 0))
+                } else {
+                    setSelectedRange(NSRange(location: line.range.location - 1, length: 0))
+                }
+            } else {
+                let next = line.contentEnd + 1
+                guard next <= ns.length else { return true }
+                if next == ns.length || ns.character(at: next) == 0x0A {
+                    if next < ns.length { insertText("", replacementRange: NSRange(location: next, length: 1)) }
+                } else {
+                    setSelectedRange(NSRange(location: next, length: 0))
+                }
+            }
+            return true
         }
         if backward {
             // At the start of a line, the line above.

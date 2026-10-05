@@ -19,6 +19,20 @@ extension NativeTextView {
     func applyBlockImageCaretPolicy() {
         let indicators = subviews.filter { type(of: $0) == NSTextInsertionIndicator.self }
         guard !indicators.isEmpty else { return }
+        // Before or after a drawn picture (syntax hidden): a bar as tall as the picture beside it.
+        let selection = selectedRange()
+        if hidesSyntax, selection.length == 0, let picture = pictureLine(containing: selection.location),
+           let rect = drawnPictureRect(onLineStarting: picture.start) {
+            let before = selection.location == picture.start && picture.start != picture.contentEnd
+            isApplyingCaretShift = true
+            for sub in indicators {
+                let width = max(sub.frame.width, 2)
+                sub.frame = CGRect(x: before ? rect.minX - width - 1 : rect.maxX + 1, y: rect.minY, width: width, height: rect.height)
+                if sub.isHidden { sub.isHidden = false }
+            }
+            isApplyingCaretShift = false
+            return
+        }
 
         var hide = false
         var resize = false
